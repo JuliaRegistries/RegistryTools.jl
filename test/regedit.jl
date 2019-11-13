@@ -40,39 +40,42 @@ end
         mktempdir(@__DIR__) do temp_cache_dir
             # test when registry is not in the cache and not downloaded
             cache = PkgRegistryEditTools.RegistryCache(temp_cache_dir)
-            repo = get_registry(DEFAULT_REGISTRY_URL, cache=cache, gitconfig=TEST_GITCONFIG)
-            @test LibGit2.path(repo) == PkgRegistryEditTools.path(cache, DEFAULT_REGISTRY_URL)
-            @test LibGit2.branch(repo) == "master"
-            @test !LibGit2.isdirty(repo)
-            @test LibGit2.url(LibGit2.lookup_remote(repo, "origin")) == DEFAULT_REGISTRY_URL
+            with(get_registry(DEFAULT_REGISTRY_URL, cache=cache, gitconfig=TEST_GITCONFIG)) do repo
+                @test LibGit2.path(repo) == replace(PkgRegistryEditTools.path(cache, DEFAULT_REGISTRY_URL), '\\'=>'/')
+                @test LibGit2.branch(repo) == "master"
+                @test !LibGit2.isdirty(repo)
+                @test LibGit2.url(LibGit2.lookup_remote(repo, "origin")) == DEFAULT_REGISTRY_URL
+            end
 
             # test when registry is in the cache but not downloaded
             registry_path = PkgRegistryEditTools.path(cache, DEFAULT_REGISTRY_URL)
             rm(registry_path, recursive=true, force=true)
             @test !ispath(registry_path)
-            repo = get_registry(DEFAULT_REGISTRY_URL, cache=cache, gitconfig=TEST_GITCONFIG)
-            @test LibGit2.path(repo) == PkgRegistryEditTools.path(cache, DEFAULT_REGISTRY_URL)
-            @test LibGit2.branch(repo) == "master"
-            @test !LibGit2.isdirty(repo)
-            @test LibGit2.url(LibGit2.lookup_remote(repo, "origin")) == DEFAULT_REGISTRY_URL
+            with(get_registry(DEFAULT_REGISTRY_URL, cache=cache, gitconfig=TEST_GITCONFIG)) do repo
+                @test LibGit2.path(repo) == replace(PkgRegistryEditTools.path(cache, DEFAULT_REGISTRY_URL), '\\'=>'/')
+                @test LibGit2.branch(repo) == "master"
+                @test !LibGit2.isdirty(repo)
+                @test LibGit2.url(LibGit2.lookup_remote(repo, "origin")) == DEFAULT_REGISTRY_URL
 
-            # test when registry is in the cache, downloaded, but mutated
-            orig_hash = LibGit2.GitHash()
-            LibGit2.branch!(repo, "newbranch", force=true)
-            LibGit2.remove!(repo, "Registry.toml")
-            LibGit2.commit(
-                repo,
-                "Removing Registry.toml in Registrator tests";
-                author=TEST_SIGNATURE,
-                committer=TEST_SIGNATURE,
-            )
-            @test LibGit2.GitObject(repo, "HEAD") != LibGit2.GitObject(repo, "master")
-            @test ispath(registry_path)
-            repo = get_registry(DEFAULT_REGISTRY_URL, cache=cache, gitconfig=TEST_GITCONFIG)
-            @test LibGit2.path(repo) == PkgRegistryEditTools.path(cache, DEFAULT_REGISTRY_URL)
-            @test LibGit2.branch(repo) == "master"
-            @test !LibGit2.isdirty(repo)
-            @test LibGit2.url(LibGit2.lookup_remote(repo, "origin")) == DEFAULT_REGISTRY_URL
+                # test when registry is in the cache, downloaded, but mutated
+                orig_hash = LibGit2.GitHash()
+                LibGit2.branch!(repo, "newbranch", force=true)
+                LibGit2.remove!(repo, "Registry.toml")
+                LibGit2.commit(
+                    repo,
+                    "Removing Registry.toml in Registrator tests";
+                    author=TEST_SIGNATURE,
+                    committer=TEST_SIGNATURE,
+                )
+                @test LibGit2.GitObject(repo, "HEAD") != LibGit2.GitObject(repo, "master")
+                @test ispath(registry_path)
+            end
+            with(get_registry(DEFAULT_REGISTRY_URL, cache=cache, gitconfig=TEST_GITCONFIG)) do repo
+                @test LibGit2.path(repo) == replace(PkgRegistryEditTools.path(cache, DEFAULT_REGISTRY_URL), '\\'=>'/')
+                @test LibGit2.branch(repo) == "master"
+                @test !LibGit2.isdirty(repo)
+                @test LibGit2.url(LibGit2.lookup_remote(repo, "origin")) == DEFAULT_REGISTRY_URL
+            end
         end
     end
 end
