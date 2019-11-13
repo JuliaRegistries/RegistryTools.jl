@@ -1,4 +1,4 @@
-module RegEdit
+module PkgRegistryEditTools
 
 export RegBranch
 export register

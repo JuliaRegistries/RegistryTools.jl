@@ -1,5 +1,4 @@
-using Registrator.RegEdit: RegEdit,
-    DEFAULT_REGISTRY_URL,
+using PkgRegistryEditTools: DEFAULT_REGISTRY_URL,
     parse_registry,
     showsafe,
     registration_branch,
@@ -19,7 +18,7 @@ const TEST_SIGNATURE = LibGit2.Signature(
     TEST_GITCONFIG["user.email"],
 )
 
-@testset "RegEdit" begin
+@testset "PkgRegistryEditTools" begin
 
 @testset "Utilities" begin
     @testset "showsafe" begin
@@ -40,19 +39,19 @@ end
     @testset "get_registry" begin
         mktempdir(@__DIR__) do temp_cache_dir
             # test when registry is not in the cache and not downloaded
-            cache = RegEdit.RegistryCache(temp_cache_dir)
+            cache = PkgRegistryEditTools.RegistryCache(temp_cache_dir)
             repo = get_registry(DEFAULT_REGISTRY_URL, cache=cache, gitconfig=TEST_GITCONFIG)
-            @test LibGit2.path(repo) == RegEdit.path(cache, DEFAULT_REGISTRY_URL)
+            @test LibGit2.path(repo) == PkgRegistryEditTools.path(cache, DEFAULT_REGISTRY_URL)
             @test LibGit2.branch(repo) == "master"
             @test !LibGit2.isdirty(repo)
             @test LibGit2.url(LibGit2.lookup_remote(repo, "origin")) == DEFAULT_REGISTRY_URL
 
             # test when registry is in the cache but not downloaded
-            registry_path = RegEdit.path(cache, DEFAULT_REGISTRY_URL)
+            registry_path = PkgRegistryEditTools.path(cache, DEFAULT_REGISTRY_URL)
             rm(registry_path, recursive=true, force=true)
             @test !ispath(registry_path)
             repo = get_registry(DEFAULT_REGISTRY_URL, cache=cache, gitconfig=TEST_GITCONFIG)
-            @test LibGit2.path(repo) == RegEdit.path(cache, DEFAULT_REGISTRY_URL)
+            @test LibGit2.path(repo) == PkgRegistryEditTools.path(cache, DEFAULT_REGISTRY_URL)
             @test LibGit2.branch(repo) == "master"
             @test !LibGit2.isdirty(repo)
             @test LibGit2.url(LibGit2.lookup_remote(repo, "origin")) == DEFAULT_REGISTRY_URL
@@ -70,7 +69,7 @@ end
             @test LibGit2.GitObject(repo, "HEAD") != LibGit2.GitObject(repo, "master")
             @test ispath(registry_path)
             repo = get_registry(DEFAULT_REGISTRY_URL, cache=cache, gitconfig=TEST_GITCONFIG)
-            @test LibGit2.path(repo) == RegEdit.path(cache, DEFAULT_REGISTRY_URL)
+            @test LibGit2.path(repo) == PkgRegistryEditTools.path(cache, DEFAULT_REGISTRY_URL)
             @test LibGit2.branch(repo) == "master"
             @test !LibGit2.isdirty(repo)
             @test LibGit2.url(LibGit2.lookup_remote(repo, "origin")) == DEFAULT_REGISTRY_URL
@@ -79,7 +78,7 @@ end
 end
 
 @testset "RegistryData" begin
-    blank = RegEdit.RegistryData("BlankRegistry", "d4e2f5cd-0f48-4704-9988-f1754e755b45")
+    blank = PkgRegistryEditTools.RegistryData("BlankRegistry", "d4e2f5cd-0f48-4704-9988-f1754e755b45")
 
     example = Project(Dict(
         "name" => "Example", "uuid" => "7876af07-990d-54b4-ab0e-23690620f79a"
@@ -106,7 +105,7 @@ end
             """
 
         registry_data = parse_registry(IOBuffer(registry))
-        @test registry_data isa RegEdit.RegistryData
+        @test registry_data isa PkgRegistryEditTools.RegistryData
         written_registry = sprint(TOML.print, registry_data)
         written_registry_data = parse_registry(IOBuffer(written_registry))
 
@@ -127,7 +126,7 @@ end
 end
 
 @testset "check_version!" begin
-    import Registrator.RegEdit: RegBranch, check_version!
+    import PkgRegistryEditTools: RegBranch, check_version!
     import Pkg.Types: Project
 
     for ver in ["0.0.2", "0.3.2", "4.3.2"]
