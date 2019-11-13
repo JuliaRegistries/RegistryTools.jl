@@ -1,4 +1,4 @@
-name = "PkgRegistryEditTools"
+name = "RegistryTools"
 uuid = "a6b8377c-0d2e-4036-b3f5-a0a7b93376f0"
 authors = ["Stefan Karpinski <stefan@karpinski.org>"]
 version = "1.0.0-DEV"

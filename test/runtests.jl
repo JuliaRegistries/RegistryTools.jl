@@ -1,7 +1,7 @@
-using PkgRegistryEditTools
+using RegistryTools
 using Test
 
-@testset "PkgRegistryEditTools" begin
+@testset "RegistryTools" begin
 
 include("regedit.jl")
 
