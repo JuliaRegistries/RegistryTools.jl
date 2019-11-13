@@ -1,7 +1,7 @@
 name = "PkgRegistryEditTools"
 uuid = "a6b8377c-0d2e-4036-b3f5-a0a7b93376f0"
 authors = ["Stefan Karpinski <stefan@karpinski.org>"]
-version = "1.0.0"
+version = "1.0.0-DEV"
 
 [deps]
 AutoHashEquals = "15f4f7f2-30c1-5605-9d31-71845cf9641f"
