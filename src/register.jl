@@ -101,13 +101,19 @@ function check_version!(regbr::RegBranch, existing::Vector{VersionNumber})
             return regbr
         end
         nxt = if ver.major != prv.major
-            push!(get!(regbr.metadata, "labels", String[]), "major release")
+            push!(get!(regbr.metadata, "labels", String[]), "major release", "BREAKING")
             VersionNumber(prv.major+1, 0, 0)
         elseif ver.minor != prv.minor
             push!(get!(regbr.metadata, "labels", String[]), "minor release")
+            if ver.major == 0
+                push!(get!(regbr.metadata, "labels", String[]), "BREAKING")
+            end
             VersionNumber(prv.major, prv.minor+1, 0)
         else
             push!(get!(regbr.metadata, "labels", String[]), "patch release")
+            if ver.major == ver.minor == 0
+                push!(get!(regbr.metadata, "labels", String[]), "BREAKING")
+            end
             VersionNumber(prv.major, prv.minor, prv.patch+1)
         end
         if ver > nxt
