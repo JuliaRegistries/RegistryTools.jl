@@ -139,6 +139,7 @@ end
         @test haskey(regbr.metadata, "warning")
         @test length(regbr.metadata["warning"]) != 0
         @test !haskey(regbr.metadata, "error")
+        @test regbr.metadata["labels"] == ["new package"]
     end
 
     for ver in ["0.0.1", "0.1.0", "1.0.0"]
@@ -147,6 +148,7 @@ end
         check_version!(regbr, VersionNumber[])
         @test !haskey(regbr.metadata, "warning")
         @test !haskey(regbr.metadata, "error")
+        @test regbr.metadata["labels"] == ["new package"]
     end
 
     versions_list = [v"0.0.5", v"0.1.0", v"0.1.5", v"1.0.0"]
@@ -168,21 +170,42 @@ end
         @test !haskey(regbr.metadata, "warning")
     end
 
-    let    # Non-existing version
-        pkg = Project(Dict("name" => "TestTools", "version" => "0.0.6"))
+    # Non-existing version
+    for (ver, type) in [("0.1.1", "patch"), ("0.1.6", "patch"), ("1.0.1", "patch"), ("1.1.0", "minor")]
+        pkg = Project(Dict("name" => "TestTools", "version" => ver))
         regbr = RegBranch(pkg, "test")
         check_version!(regbr, versions_list)
         @test !haskey(regbr.metadata, "error")
         @test !haskey(regbr.metadata, "warning")
+        @test regbr.metadata["labels"] == ["$(type) release"]
+    end
+    for (ver, type) in [("0.0.6", "patch"), ("0.2.0", "minor"), ("2.0.0", "major")]
+        pkg = Project(Dict("name" => "TestTools", "version" => ver))
+        regbr = RegBranch(pkg, "test")
+        check_version!(regbr, versions_list)
+        @test !haskey(regbr.metadata, "error")
+        @test !haskey(regbr.metadata, "warning")
+        @test regbr.metadata["labels"] == ["$(type) release", "BREAKING"]
     end
 
-    let    # Skip a version
-        pkg = Project(Dict("name" => "TestTools", "version" => "0.0.7"))
+    # Skip a version
+    for (ver, type) in [("0.1.2", "patch"), ("0.1.7", "patch"), ("1.0.2", "patch"), ("1.2.0", "minor")]
+        pkg = Project(Dict("name" => "TestTools", "version" => ver))
         regbr = RegBranch(pkg, "test")
         check_version!(regbr, versions_list)
         @test !haskey(regbr.metadata, "error")
         @test haskey(regbr.metadata, "warning")
         @test length(regbr.metadata["warning"]) != 0
+        @test regbr.metadata["labels"] == ["$(type) release"]
+    end
+    for (ver, type) in [("0.0.7", "patch"), ("0.3.0", "minor"), ("3.0.0", "major")]
+        pkg = Project(Dict("name" => "TestTools", "version" => ver))
+        regbr = RegBranch(pkg, "test")
+        check_version!(regbr, versions_list)
+        @test !haskey(regbr.metadata, "error")
+        @test haskey(regbr.metadata, "warning")
+        @test length(regbr.metadata["warning"]) != 0
+        @test regbr.metadata["labels"] == ["$(type) release", "BREAKING"]
     end
 end
 
