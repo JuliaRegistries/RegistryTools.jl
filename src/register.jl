@@ -198,7 +198,11 @@ function compress_versions(pool::Vector{VersionNumber}, subset)
     compress_versions(pool, filter(in(subset), pool))
 end
 
-import Pkg.Compress.load_versions
+function load_versions(path::String)
+    versions_file = joinpath(dirname(path), "Versions.toml")
+    versions_dict = TOML.parsefile(versions_file)
+    return sort!([VersionNumber(v) for v in keys(versions_dict)])
+end
 
 function compress(path::AbstractString, uncompressed::Dict,
     versions::Vector{VersionNumber} = load_versions(path))
