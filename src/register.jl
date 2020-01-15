@@ -157,75 +157,6 @@ function versionrange(lo::VersionBound, hi::VersionBound)
     return VersionRange(lo, hi)
 end
 
-# Code copied from Pkg found in dev julia (Current version is 1.1)
-# TODO: Remove after moving to julia 1.2
-"""
-    compress_versions(pool::Vector{VersionNumber}, subset::Vector{VersionNumber})
-Given `pool` as the pool of available versions (of some package) and `subset` as some
-subset of the pool of available versions, this function computes a `VersionSpec` which
-includes all versions in `subset` and none of the versions in its complement.
-"""
-function compress_versions(pool::Vector{VersionNumber}, subset::Vector{VersionNumber})
-    # Explicitly drop prerelease/build numbers, as those can confuse this.
-    # TODO: Rewrite all this to use VersionNumbers instead of VersionBounds
-    drop_build_prerelease(v::VersionNumber) = VersionNumber(v.major, v.minor, v.patch)
-    pool = drop_build_prerelease.(pool)
-    subset = sort!(drop_build_prerelease.(subset))
-
-    complement = sort!(setdiff(pool, subset))
-    ranges = VersionRange[]
-    @label again
-    isempty(subset) && return VersionSpec(ranges)
-    a = first(subset)
-    for b in reverse(subset)
-        a.major == b.major || continue
-        for m = 1:3
-            lo = VersionBound((a.major, a.minor, a.patch)[1:m]...)
-            for n = 1:3
-                hi = VersionBound((b.major, b.minor, b.patch)[1:n]...)
-                r = versionrange(lo, hi)
-                if !any(v in r for v in complement)
-                    filter!(!in(r), subset)
-                    push!(ranges, r)
-                    @goto again
-                end
-            end
-        end
-    end
-end
-
-function compress_versions(pool::Vector{VersionNumber}, subset)
-    compress_versions(pool, filter(in(subset), pool))
-end
-
-import Pkg.Compress.load_versions
-
-function compress(path::AbstractString, uncompressed::Dict,
-    versions::Vector{VersionNumber} = load_versions(path))
-    inverted = Dict()
-    for (ver, data) in uncompressed, (key, val) in data
-        val isa TOML.TYPE || (val = string(val))
-        push!(get!(inverted, key => val, VersionNumber[]), ver)
-    end
-    compressed = Dict()
-    for ((k, v), vers) in inverted
-        for r in compress_versions(versions, sort!(vers)).ranges
-            get!(compressed, string(r), Dict{String,Any}())[k] = v
-        end
-    end
-    return compressed
-end
-
-function save(path::AbstractString, uncompressed::Dict,
-    versions::Vector{VersionNumber} = load_versions(path))
-    compressed = compress(path, uncompressed)
-    open(path, write=true) do io
-        TOML.print(io, compressed, sorted=true)
-    end
-end
-
-# ---- End of code copied from Pkg
-
 function find_package_in_registry(pkg::Pkg.Types.Project,
                                   package_repo::AbstractString,
                                   registry_file::AbstractString,
@@ -323,7 +254,7 @@ function update_deps_file(pkg::Pkg.Types.Project,
 
     deps_file = joinpath(package_path, "Deps.toml")
     if isfile(deps_file)
-        deps_data = Pkg.Compress.load(deps_file)
+        deps_data = Compress.load(deps_file)
     else
         deps_data = Dict()
     end
@@ -376,7 +307,7 @@ function update_compat_file(pkg::Pkg.Types.Project,
     @debug("update package data: compat file")
     compat_file = joinpath(package_path, "Compat.toml")
     if isfile(compat_file)
-        compat_data = Pkg.Compress.load(compat_file)
+        compat_data = Compress.load(compat_file)
     else
         compat_data = Dict()
     end
