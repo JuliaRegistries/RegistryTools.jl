@@ -49,6 +49,16 @@ for the project file in that tree and a hash string for the tree.
 
 const julia_uuid = "1222c4b2-2114-5bfd-aeef-88e4692bbb3e"
 
+mutable struct ReturnStatus
+    error::String
+    warning::String
+    kind::String
+    labels::Vector{String}
+end
+
+ReturnStatus() = ReturnStatus("", "", "", String[])
+haserror(status::ReturnStatus) = !isempty(status.error)
+
 struct RegBranch
     name::String
     version::VersionNumber
@@ -59,6 +69,16 @@ struct RegBranch
     function RegBranch(pkg::Pkg.Types.Project, branch::AbstractString)
         new(pkg.name, pkg.version, branch, Dict{String,Any}())
     end
+end
+
+function set_metadata!(regbr::RegBranch, status::ReturnStatus)
+    for field in fieldnames(ReturnStatus)
+        value = getfield(status, field)
+        if !isempty(value)
+            regbr.metadata[string(field)] = value
+        end
+    end
+    return regbr
 end
 
 get_backtrace(ex) = sprint(Base.showerror, ex, catch_backtrace())
@@ -72,57 +92,57 @@ end
 # error in regbr.metadata["errors"]
 # warning in regbr.metadata["warning"]
 # version labels for the PR in in regbr.metadata["labels"]
-function check_version!(regbr::RegBranch, existing::Vector{VersionNumber})
-    ver = regbr.version
-    if ver == v"0"
-        regbr.metadata["error"] = "Package version must be greater than 0.0.0"
-        return regbr
+function check_version!(version::VersionNumber, existing::Vector{VersionNumber},
+                        status::ReturnStatus)
+    if version == v"0"
+        status.error = "Package version must be greater than 0.0.0"
+        return status
     end
 
     @assert issorted(existing)
     if isempty(existing)
-        push!(get!(regbr.metadata, "labels", String[]), "new package")
-        if !(ver in [v"0.0.1", v"0.1", v"1"])
-            regbr.metadata["warning"] =
-                """This looks like a new registration that registers version $ver.
+        push!(status.labels, "new package")
+        if !(version in [v"0.0.1", v"0.1", v"1"])
+            status.warning =
+                """This looks like a new registration that registers version $version.
                 Ideally, you should register an initial release with 0.0.1, 0.1.0 or 1.0.0 version numbers"""
         end
-        return regbr
+        return status
     else
-        idx = searchsortedlast(existing, ver)
+        idx = searchsortedlast(existing, version)
         if idx <= 0
-            regbr.metadata["error"] = "Version $ver less than least existing version $(existing[1])"
-            return regbr
+            status.error = "Version $version less than least existing version $(existing[1])"
+            return status
         end
 
         prv = existing[idx]
-        if ver == prv
-            regbr.metadata["error"] = "Version $ver already exists"
-            return regbr
+        if version == prv
+            status.error = "Version $version already exists"
+            return status
         end
-        nxt = if ver.major != prv.major
-            push!(get!(regbr.metadata, "labels", String[]), "major release", "BREAKING")
+        nxt = if version.major != prv.major
+            push!(status.labels, "major release", "BREAKING")
             VersionNumber(prv.major+1, 0, 0)
-        elseif ver.minor != prv.minor
-            push!(get!(regbr.metadata, "labels", String[]), "minor release")
-            if ver.major == 0
-                push!(get!(regbr.metadata, "labels", String[]), "BREAKING")
+        elseif version.minor != prv.minor
+            push!(status.labels, "minor release")
+            if version.major == 0
+                push!(status.labels, "BREAKING")
             end
             VersionNumber(prv.major, prv.minor+1, 0)
         else
-            push!(get!(regbr.metadata, "labels", String[]), "patch release")
-            if ver.major == ver.minor == 0
-                push!(get!(regbr.metadata, "labels", String[]), "BREAKING")
+            push!(status.labels, "patch release")
+            if version.major == version.minor == 0
+                push!(status.labels, "BREAKING")
             end
             VersionNumber(prv.major, prv.minor, prv.patch+1)
         end
-        if ver > nxt
-            regbr.metadata["warning"] = "Version $ver skips over $nxt"
-            return regbr
+        if version > nxt
+            status.warning = "Version $version skips over $nxt"
+            return status
         end
     end
 
-    return regbr
+    return status
 end
 
 findpackageerror(name::AbstractString, uuid::Base.UUID, regdata::Array{RegistryData}) =
@@ -162,33 +182,33 @@ function find_package_in_registry(pkg::Pkg.Types.Project,
                                   registry_file::AbstractString,
                                   registry_path::AbstractString,
                                   registry_data::RegistryData,
-                                  regbr::RegBranch)
+                                  status::ReturnStatus)
     uuid = string(pkg.uuid)
     if haskey(registry_data.packages, uuid)
         package_data = registry_data.packages[uuid]
         if package_data["name"] != pkg.name
             err = "Changing package names not supported yet"
             @debug(err)
-            regbr.metadata["error"] = err
-            return nothing, regbr
+            status.error = err
+            return nothing
         end
         package_path = joinpath(registry_path, package_data["path"])
         repo = TOML.parsefile(joinpath(package_path, "Package.toml"))["repo"]
         if repo != package_repo
             err = "Changing package repo URL not allowed, please submit a pull request with the URL change to the target registry and retry."
             @debug(err)
-            regbr.metadata["error"] = err
-            return nothing, regbr
+            status.error = err
+            return nothing
         end
-        regbr.metadata["kind"] = "New version"
+        status.kind = "New version"
     else
         @debug("Package with UUID: $uuid not found in registry, checking if UUID was changed")
         for (k, v) in registry_data.packages
             if v["name"] == pkg.name
                 err = "Changing UUIDs is not allowed"
                 @debug(err)
-                regbr.metadata["error"] = err
-                return nothing, regbr
+                status.error = err
+                return nothing
             end
         end
 
@@ -199,10 +219,10 @@ function find_package_in_registry(pkg::Pkg.Types.Project,
         @debug("Adding package UUID to registry")
         push!(registry_data, pkg)
         write_registry(registry_file, registry_data)
-        regbr.metadata["kind"] = "New package"
+        status.kind = "New package"
     end
 
-    return package_path, regbr
+    return package_path
 end
 
 function update_package_file(pkg::Pkg.Types.Project,
@@ -221,16 +241,14 @@ end
 
 function update_versions_file(pkg::Pkg.Types.Project,
                               package_path::AbstractString,
-                              regbr::RegBranch,
-                              tree_hash::AbstractString)
+                              tree_hash::AbstractString,
+                              status::ReturnStatus)
     versions_file = joinpath(package_path, "Versions.toml")
     versions_data = isfile(versions_file) ? TOML.parsefile(versions_file) : Dict()
     versions = sort!([VersionNumber(v) for v in keys(versions_data)])
 
-    check_version!(regbr, versions)
-    if get(regbr.metadata, "error", nothing) !== nothing
-        return regbr
-    end
+    check_version!(pkg.version, versions, status)
+    haserror(status) && return
 
     version_info = Dict{String,Any}("git-tree-sha1" => string(tree_hash))
     versions_data[string(pkg.version)] = version_info
@@ -243,13 +261,13 @@ end
 
 function update_deps_file(pkg::Pkg.Types.Project,
                           package_path::AbstractString,
-                          regbr::RegBranch,
-                          regdata::Vector{RegistryData})
+                          regdata::Vector{RegistryData},
+                          status::ReturnStatus)
     if pkg.name in keys(pkg.deps)
         err = "Package $(pkg.name) mentions itself in `[deps]`"
         @debug(err)
-        regbr.metadata["error"] = err
-        return regbr
+        status.error = err
+        return
     end
 
     deps_file = joinpath(package_path, "Deps.toml")
@@ -264,8 +282,8 @@ function update_deps_file(pkg::Pkg.Types.Project,
         err = findpackageerror(k, v, regdata)
         if err !== nothing
             @debug(err)
-            regbr.metadata["error"] = err
-            return regbr
+            status.error = err
+            return
         end
     end
 
@@ -276,9 +294,9 @@ end
 
 function update_compat_file(pkg::Pkg.Types.Project,
                             package_path::AbstractString,
-                            regbr::RegBranch,
                             regdata::Vector{RegistryData},
-                            regpaths::Vector{String})
+                            regpaths::Vector{String},
+                            status::ReturnStatus)
     err = nothing
     for (p, v) in pkg.compat
         try
@@ -300,8 +318,8 @@ function update_compat_file(pkg::Pkg.Types.Project,
     end
 
     if err !== nothing
-        regbr.metadata["error"] = err
-        return regbr
+        status.error = err
+        return
     end
 
     @debug("update package data: compat file")
@@ -326,8 +344,8 @@ function update_compat_file(pkg::Pkg.Types.Project,
     if !isempty(invalid_compats)
         err = "Following packages are mentioned in `[compat]` but not found in `[deps]` or `[extras]`:\n" * join(invalid_compats, "\n")
         @debug(err)
-        regbr.metadata["error"] = err
-        return regbr
+        status.error = err
+        return
     end
 
     for (n, v) in pkg.compat
@@ -377,8 +395,8 @@ function update_compat_file(pkg::Pkg.Types.Project,
     end
 
     if err !== nothing
-        regbr.metadata["error"] = err
-        return regbr
+        status.error = err
+        return
     end
 
     compat_data[pkg.version] = d
@@ -444,6 +462,9 @@ function register(
     # return object
     regbr = RegBranch(pkg, branch)
 
+    # status object
+    status = ReturnStatus()
+
     # get up-to-date clone of registry
     @debug("get up-to-date clone of registry")
     registry = GitTools.normalize_url(registry)
@@ -471,10 +492,10 @@ function register(
         @debug("find package in registry")
         registry_file = joinpath(registry_path, "Registry.toml")
         registry_data = parse_registry(registry_file)
-        package_path, regbr = find_package_in_registry(pkg, package_repo,
-                                                       registry_file, registry_path,
-                                                       registry_data, regbr)
-        package_path === nothing && return regbr
+        package_path = find_package_in_registry(pkg, package_repo,
+                                                registry_file, registry_path,
+                                                registry_data, status)
+        haserror(status) && return set_metadata!(regbr, status)
 
         # update package data: package file
         @debug("update package data: package file")
@@ -482,8 +503,8 @@ function register(
 
         # update package data: versions file
         @debug("update package data: versions file")
-        r = update_versions_file(pkg, package_path, regbr, tree_hash)
-        r === nothing || return r
+        update_versions_file(pkg, package_path, tree_hash, status)
+        haserror(status) && return set_metadata!(regbr, status)
 
         # update package data: deps file
         @debug("update package data: deps file")
@@ -491,21 +512,21 @@ function register(
             parse_registry(joinpath(registry_path, "Registry.toml"))
         end
         regdata = [registry_data; registry_deps_data]
-        r = update_deps_file(pkg, package_path, regbr, regdata)
-        r === nothing || return r
+        update_deps_file(pkg, package_path, regdata, status)
+        haserror(status) && return set_metadata!(regbr, status)
 
         # update package data: compat file
         @debug("check compat section")
         regpaths = [registry_path; registry_deps_paths]
-        r = update_compat_file(pkg, package_path, regbr, regdata, regpaths)
-        r === nothing || return r
+        update_compat_file(pkg, package_path, regdata, regpaths, status)
+        haserror(status) && return set_metadata!(regbr, status)
 
         regtreesha = get_registrator_tree_sha()
 
         # commit changes
         @debug("commit changes")
         message = """
-        $(regbr.metadata["kind"]): $(pkg.name) v$(pkg.version)
+        $(status.kind): $(pkg.name) v$(pkg.version)
 
         UUID: $(pkg.uuid)
         Repo: $(package_repo)
@@ -528,14 +549,14 @@ function register(
         clean_registry = false
     catch ex
         println(get_backtrace(ex))
-        regbr.metadata["error"] = "Unexpected error in registration"
+        status.error = "Unexpected error in registration"
     finally
         if clean_registry
             @debug("cleaning up possibly inconsistent registry", registry_path=showsafe(registry_path), err=showsafe(err))
             rm(registry_path; recursive=true, force=true)
         end
     end
-    return regbr
+    return set_metadata!(regbr, status)
 end
 
 struct RegisterParams

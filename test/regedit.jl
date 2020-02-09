@@ -129,83 +129,72 @@ end
 end
 
 @testset "check_version!" begin
-    import RegistryTools: RegBranch, check_version!
+    import RegistryTools: ReturnStatus, check_version!, haserror
     import Pkg.Types: Project
 
-    for ver in ["0.0.2", "0.3.2", "4.3.2"]
-        pkg = Project(Dict("name" => "TestTools", "version" => ver))
-        regbr = RegBranch(pkg, "test")
-        check_version!(regbr, VersionNumber[])
-        @test haskey(regbr.metadata, "warning")
-        @test length(regbr.metadata["warning"]) != 0
-        @test !haskey(regbr.metadata, "error")
-        @test regbr.metadata["labels"] == ["new package"]
+    for ver in [v"0.0.2", v"0.3.2", v"4.3.2"]
+        status = ReturnStatus()
+        check_version!(ver, VersionNumber[], status)
+        @test !isempty(status.warning)
+        @test !haserror(status)
+        @test status.labels == ["new package"]
     end
 
-    for ver in ["0.0.1", "0.1.0", "1.0.0"]
-        pkg = Project(Dict("name" => "TestTools", "version" => ver))
-        regbr = RegBranch(pkg, "test")
-        check_version!(regbr, VersionNumber[])
-        @test !haskey(regbr.metadata, "warning")
-        @test !haskey(regbr.metadata, "error")
-        @test regbr.metadata["labels"] == ["new package"]
+    for ver in [v"0.0.1", v"0.1.0", v"1.0.0"]
+        status = ReturnStatus()
+        check_version!(ver, VersionNumber[], status)
+        @test isempty(status.warning)
+        @test !haserror(status)
+        @test status.labels == ["new package"]
     end
 
     versions_list = [v"0.0.5", v"0.1.0", v"0.1.5", v"1.0.0"]
     let    # Less than least existing version
-        pkg = Project(Dict("name" => "TestTools", "version" => "0.0.4"))
-        regbr = RegBranch(pkg, "test")
-        check_version!(regbr, versions_list)
-        @test haskey(regbr.metadata, "error")
-        @test length(regbr.metadata["error"]) != 0
-        @test !haskey(regbr.metadata, "warning")
+        ver = v"0.0.4"
+        status = ReturnStatus()
+        check_version!(ver, versions_list, status)
+        @test haserror(status)
+        @test isempty(status.warning)
     end
 
     let    # Existing version
-        pkg = Project(Dict("name" => "TestTools", "version" => "0.0.5"))
-        regbr = RegBranch(pkg, "test")
-        check_version!(regbr, versions_list)
-        @test haskey(regbr.metadata, "error")
-        @test length(regbr.metadata["error"]) != 0
-        @test !haskey(regbr.metadata, "warning")
+        ver = v"0.0.5"
+        status = ReturnStatus()
+        check_version!(ver, versions_list, status)
+        @test haserror(status)
+        @test isempty(status.warning)
     end
 
     # Non-existing version
-    for (ver, type) in [("0.1.1", "patch"), ("0.1.6", "patch"), ("1.0.1", "patch"), ("1.1.0", "minor")]
-        pkg = Project(Dict("name" => "TestTools", "version" => ver))
-        regbr = RegBranch(pkg, "test")
-        check_version!(regbr, versions_list)
-        @test !haskey(regbr.metadata, "error")
-        @test !haskey(regbr.metadata, "warning")
-        @test regbr.metadata["labels"] == ["$(type) release"]
+    for (ver, type) in [(v"0.1.1", "patch"), (v"0.1.6", "patch"), (v"1.0.1", "patch"), (v"1.1.0", "minor")]
+        status = ReturnStatus()
+        check_version!(ver, versions_list, status)
+        @test !haserror(status)
+        @test isempty(status.warning)
+        @test status.labels == ["$(type) release"]
     end
-    for (ver, type) in [("0.0.6", "patch"), ("0.2.0", "minor"), ("2.0.0", "major")]
-        pkg = Project(Dict("name" => "TestTools", "version" => ver))
-        regbr = RegBranch(pkg, "test")
-        check_version!(regbr, versions_list)
-        @test !haskey(regbr.metadata, "error")
-        @test !haskey(regbr.metadata, "warning")
-        @test regbr.metadata["labels"] == ["$(type) release", "BREAKING"]
+    for (ver, type) in [(v"0.0.6", "patch"), (v"0.2.0", "minor"), (v"2.0.0", "major")]
+        status = ReturnStatus()
+        check_version!(ver, versions_list, status)
+        @test !haserror(status)
+        @test isempty(status.warning)
+        @test status.labels == ["$(type) release", "BREAKING"]
     end
 
     # Skip a version
-    for (ver, type) in [("0.1.2", "patch"), ("0.1.7", "patch"), ("1.0.2", "patch"), ("1.2.0", "minor")]
-        pkg = Project(Dict("name" => "TestTools", "version" => ver))
-        regbr = RegBranch(pkg, "test")
-        check_version!(regbr, versions_list)
-        @test !haskey(regbr.metadata, "error")
-        @test haskey(regbr.metadata, "warning")
-        @test length(regbr.metadata["warning"]) != 0
-        @test regbr.metadata["labels"] == ["$(type) release"]
+    for (ver, type) in [(v"0.1.2", "patch"), (v"0.1.7", "patch"), (v"1.0.2", "patch"), (v"1.2.0", "minor")]
+        status = ReturnStatus()
+        check_version!(ver, versions_list, status)
+        @test !haserror(status)
+        @test !isempty(status.warning)
+        @test status.labels == ["$(type) release"]
     end
-    for (ver, type) in [("0.0.7", "patch"), ("0.3.0", "minor"), ("3.0.0", "major")]
-        pkg = Project(Dict("name" => "TestTools", "version" => ver))
-        regbr = RegBranch(pkg, "test")
-        check_version!(regbr, versions_list)
-        @test !haskey(regbr.metadata, "error")
-        @test haskey(regbr.metadata, "warning")
-        @test length(regbr.metadata["warning"]) != 0
-        @test regbr.metadata["labels"] == ["$(type) release", "BREAKING"]
+    for (ver, type) in [(v"0.0.7", "patch"), (v"0.3.0", "minor"), (v"3.0.0", "major")]
+        status = ReturnStatus()
+        check_version!(ver, versions_list, status)
+        @test !haserror(status)
+        @test !isempty(status.warning)
+        @test status.labels == ["$(type) release", "BREAKING"]
     end
 end
 
