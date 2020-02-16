@@ -239,42 +239,39 @@ function update_package_file(pkg::Pkg.Types.Project,
     nothing
 end
 
-function update_versions_file(pkg::Pkg.Types.Project,
-                              package_path::AbstractString,
-                              tree_hash::AbstractString,
-                              status::ReturnStatus)
-    versions_file = joinpath(package_path, "Versions.toml")
-    versions_data = isfile(versions_file) ? TOML.parsefile(versions_file) : Dict()
+function get_versions_file(package_path::AbstractString)
+    filename = joinpath(package_path, "Versions.toml")
+    data = isfile(filename) ? TOML.parsefile(filename) : Dict{String, Any}()
+    return filename, data
+end
+
+function check_versions!(pkg::Pkg.Types.Project,
+                         versions_data::Dict{String, Any},
+                         status::ReturnStatus)
     versions = sort!([VersionNumber(v) for v in keys(versions_data)])
-
     check_version!(pkg.version, versions, status)
-    haserror(status) && return
+end
 
-    version_info = Dict{String,Any}("git-tree-sha1" => string(tree_hash))
+function update_versions_file(pkg::Pkg.Types.Project,
+                              versions_file::AbstractString,
+                              versions_data::Dict{String, Any},
+                              tree_hash::AbstractString)
+    version_info = Dict{String, Any}("git-tree-sha1" => string(tree_hash))
     versions_data[string(pkg.version)] = version_info
 
     open(versions_file, "w") do io
         TOML.print(io, versions_data; sorted=true, by=x->VersionNumber(x))
     end
-    nothing
 end
 
-function update_deps_file(pkg::Pkg.Types.Project,
-                          package_path::AbstractString,
-                          regdata::Vector{RegistryData},
-                          status::ReturnStatus)
+function check_deps!(pkg::Pkg.Types.Project,
+                     regdata::Vector{RegistryData},
+                     status::ReturnStatus)
     if pkg.name in keys(pkg.deps)
         err = "Package $(pkg.name) mentions itself in `[deps]`"
         @debug(err)
         status.error = err
         return
-    end
-
-    deps_file = joinpath(package_path, "Deps.toml")
-    if isfile(deps_file)
-        deps_data = Compress.load(deps_file)
-    else
-        deps_data = Dict()
     end
 
     @debug("Verifying package name and uuid in deps")
@@ -286,52 +283,46 @@ function update_deps_file(pkg::Pkg.Types.Project,
             return
         end
     end
+    return
+end
+
+function update_deps_file(pkg::Pkg.Types.Project,
+                          package_path::AbstractString)
+    deps_file = joinpath(package_path, "Deps.toml")
+    if isfile(deps_file)
+        deps_data = Compress.load(deps_file)
+    else
+        deps_data = Dict()
+    end
 
     deps_data[pkg.version] = pkg.deps
     Compress.save(deps_file, deps_data)
-    nothing
 end
 
-function update_compat_file(pkg::Pkg.Types.Project,
-                            package_path::AbstractString,
-                            regdata::Vector{RegistryData},
-                            regpaths::Vector{String},
-                            status::ReturnStatus)
-    err = nothing
+function check_compat!(pkg::Pkg.Types.Project,
+                       regdata::Vector{RegistryData},
+                       regpaths::Vector{String},
+                       status::ReturnStatus)
     for (p, v) in pkg.compat
         try
             ver = Pkg.Types.semver_spec(v)
             if p == "julia" && any(map(x->!isempty(intersect(Pkg.Types.VersionRange("0-0.6"),x)), ver.ranges))
                 err = "Julia version < 0.7 not allowed in `[compat]`"
                 @debug(err)
-                break
+                status.error = err
+                return
             end
         catch ex
             if isdefined(ex, :msg)
                 err = "Error in `[compat]`: $(ex.msg)"
                 @debug(err)
-                break
+                status.error = err
+                return
             else
                 rethrow(ex)
             end
         end
     end
-
-    if err !== nothing
-        status.error = err
-        return
-    end
-
-    @debug("update package data: compat file")
-    compat_file = joinpath(package_path, "Compat.toml")
-    if isfile(compat_file)
-        compat_data = Compress.load(compat_file)
-    else
-        compat_data = Dict()
-    end
-
-    d = Dict()
-    err = nothing
 
     invalid_compats = []
     for (n, v) in pkg.compat
@@ -349,7 +340,6 @@ function update_compat_file(pkg::Pkg.Types.Project,
     end
 
     for (n, v) in pkg.compat
-        spec = Pkg.Types.semver_spec(v)
         if n == "julia"
             uuidofdep = julia_uuid
         else
@@ -363,13 +353,15 @@ function update_compat_file(pkg::Pkg.Types.Project,
             else
                 err = "Package $n mentioned in `[compat]` but not found in `[deps]` or `[extras]`"
                 @debug(err)
-                break
+                status.error = err
+                return
             end
 
             err = findpackageerror(n, uuidofdep, regdata)
             if err !== nothing
                 @debug(err)
-                break
+                status.error = err
+                return
             end
 
             if inextras && !indeps
@@ -386,6 +378,24 @@ function update_compat_file(pkg::Pkg.Types.Project,
                 break
             end
         end
+    end
+
+    return
+end
+
+function update_compat_file(pkg::Pkg.Types.Project,
+                            package_path::AbstractString)
+    @debug("update package data: compat file")
+    compat_file = joinpath(package_path, "Compat.toml")
+    if isfile(compat_file)
+        compat_data = Compress.load(compat_file)
+    else
+        compat_data = Dict()
+    end
+
+    d = Dict()
+    for (n, v) in pkg.compat
+        spec = Pkg.Types.semver_spec(v)
         # the call to map(versionrange, ) can be removed
         # once Pkg is updated to a version including
         # https://github.com/JuliaLang/Pkg.jl/pull/1181
@@ -394,15 +404,8 @@ function update_compat_file(pkg::Pkg.Types.Project,
         d[n] = length(ranges) == 1 ? string(ranges[1]) : map(string, ranges)
     end
 
-    if err !== nothing
-        status.error = err
-        return
-    end
-
     compat_data[pkg.version] = d
-
     Compress.save(compat_file, compat_data)
-    nothing
 end
 
 function get_registrator_tree_sha()
@@ -503,8 +506,10 @@ function register(
 
         # update package data: versions file
         @debug("update package data: versions file")
-        update_versions_file(pkg, package_path, tree_hash, status)
+        versions_file, versions_data = get_versions_file(package_path)
+        check_versions!(pkg, versions_data, status)
         haserror(status) && return set_metadata!(regbr, status)
+        update_versions_file(pkg, versions_file, versions_data, tree_hash)
 
         # update package data: deps file
         @debug("update package data: deps file")
@@ -512,14 +517,16 @@ function register(
             parse_registry(joinpath(registry_path, "Registry.toml"))
         end
         regdata = [registry_data; registry_deps_data]
-        update_deps_file(pkg, package_path, regdata, status)
+        check_deps!(pkg, regdata, status)
         haserror(status) && return set_metadata!(regbr, status)
+        update_deps_file(pkg, package_path)
 
         # update package data: compat file
         @debug("check compat section")
         regpaths = [registry_path; registry_deps_paths]
-        update_compat_file(pkg, package_path, regdata, regpaths, status)
+        check_compat!(pkg, regdata, regpaths, status)
         haserror(status) && return set_metadata!(regbr, status)
+        update_compat_file(pkg, package_path)
 
         regtreesha = get_registrator_tree_sha()
 

@@ -198,4 +198,86 @@ end
     end
 end
 
+@testset "package_file" begin
+    import RegistryTools: update_package_file
+    mktempdir(@__DIR__) do temp_dir
+        uuid = "698ec630-83b2-4a6d-81d4-a10176273030"
+        pkg = Project(Dict("name" => "Example", "uuid" => uuid))
+        repo = "https://example.com/example.git"
+        update_package_file(pkg, repo, temp_dir)
+        package_file = joinpath(temp_dir, "Package.toml")
+        @test isfile(package_file)
+        @test read(package_file, String) == """
+                                            name = "Example"
+                                            uuid = "$uuid"
+                                            repo = "$repo"
+                                            """
+    end
+end
+
+@testset "versions_file" begin
+    import RegistryTools: get_versions_file, update_versions_file, check_versions!
+    mktempdir(@__DIR__) do temp_dir
+        pkg = Project(version = v"1.0.0")
+        tree_hash = repeat("0", 40)
+        status = ReturnStatus()
+
+        filename, data = get_versions_file(temp_dir)
+        @test filename == joinpath(temp_dir, "Versions.toml")
+        @test data isa Dict
+        @test isempty(data)
+        check_versions!(pkg, data, status)
+        # No previous version registered, this version is fine.
+        @test !haserror(status)
+
+        update_versions_file(pkg, filename, data, tree_hash)
+
+        _, data = get_versions_file(temp_dir)
+        @test data isa Dict
+        @test collect(keys(data)) == ["1.0.0"]
+        @test data["1.0.0"] isa Dict
+        @test collect(keys(data["1.0.0"])) == ["git-tree-sha1"]
+        @test data["1.0.0"]["git-tree-sha1"] == tree_hash
+
+        check_versions!(pkg, data, status)
+        # This version was just registered, should be a complaint now.
+        @test haserror(status)
+    end
+end
+
+@testset "deps_file" begin
+    import RegistryTools: update_deps_file
+    mktempdir(@__DIR__) do temp_dir
+        uuid = Base.UUID("8dfed614-e22c-5e08-85e1-65c5234f0b40")
+        deps = Dict("Test" => uuid)
+        pkg = Project(version = v"1.0.0", deps = deps)
+        update_versions_file(pkg, joinpath(temp_dir, "Versions.toml"),
+                             Dict{String, Any}(), repeat("0", 40))
+        update_deps_file(pkg, temp_dir)
+        deps_file = joinpath(temp_dir, "Deps.toml")
+        @test isfile(deps_file)
+        @test read(deps_file, String) == """
+                                         [1]
+                                         Test = "$uuid"
+                                         """
+    end
+end
+
+@testset "compat_file" begin
+    import RegistryTools: update_compat_file
+    mktempdir(@__DIR__) do temp_dir
+        compat = Dict("julia" => "1.3")
+        pkg = Project(version = v"1.0.0", compat = compat)
+        update_versions_file(pkg, joinpath(temp_dir, "Versions.toml"),
+                             Dict{String, Any}(), repeat("0", 40))
+        update_compat_file(pkg, temp_dir)
+        compat_file = joinpath(temp_dir, "Compat.toml")
+        @test isfile(compat_file)
+        @test read(compat_file, String) == """
+                                           [1]
+                                           julia = "1.3.0-1"
+                                           """
+    end
+end
+
 end
