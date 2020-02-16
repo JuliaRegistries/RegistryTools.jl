@@ -49,33 +49,122 @@ for the project file in that tree and a hash string for the tree.
 
 const julia_uuid = "1222c4b2-2114-5bfd-aeef-88e4692bbb3e"
 
+# These can compromise the integrity of the registry and cannot be
+# opted out of.
+const mandatory_errors = [:version_exists,
+                          :change_package_name,  # not implemented
+                          :change_package_uuid,  # not allowed
+                          :package_self_dep,
+                          :name_mismatch,
+                          :wrong_stdlib_uuid
+                          ]
+
+# These are considered errors by Registrator and are default for the
+# `register` function. The caller can override this selection.
+const registrator_errors = [:version_zero,
+                            :version_less_than_all_existing,
+                            :change_package_url,
+                            :dependency_not_found,
+                            :julia_before_07_in_compat,
+                            :invalid_compat,
+                            :unexpected_registration_error
+                            ]
+
 mutable struct ReturnStatus
-    error::String
-    warning::String
-    kind::String
-    labels::Vector{String}
+    triggered_checks::Vector{NamedTuple}
+    errors::Set{Symbol}
+    error_found::Bool
 end
 
-ReturnStatus() = ReturnStatus("", "", "", String[])
-haserror(status::ReturnStatus) = !isempty(status.error)
+function ReturnStatus(errors::Vector{Symbol} = Symbol[])
+    ReturnStatus(NamedTuple[], union!(Set(mandatory_errors), errors), false)
+end
+
+function add!(status::ReturnStatus, check::Symbol,
+              data::Union{Nothing, NamedTuple}=nothing)
+    if isnothing(data)
+        push!(status.triggered_checks, (id = check,))
+    else
+        push!(status.triggered_checks, merge((id = check,), data))
+    end
+    status.error_found |= check in status.errors
+end
+
+haserror(status::ReturnStatus) = status.error_found
 
 struct RegBranch
     name::String
     version::VersionNumber
     branch::String
 
-    metadata::Dict{String,Any} # "error", "warning", kind etc.
+    metadata::Dict{String, Any} # "error", "warning", kind etc.
 
     function RegBranch(pkg::Pkg.Types.Project, branch::AbstractString)
         new(pkg.name, pkg.version, branch, Dict{String,Any}())
     end
 end
 
+function add_label!(regbr::RegBranch, label)
+    if !haskey(regbr.metadata, "labels")
+        regbr.metadata["labels"] = String[]
+    end
+    pushfirst!(regbr.metadata["labels"], label)
+end
+
+# error in regbr.metadata["errors"]
+# warning in regbr.metadata["warning"]
+# version labels for the PR in in regbr.metadata["labels"]
 function set_metadata!(regbr::RegBranch, status::ReturnStatus)
-    for field in fieldnames(ReturnStatus)
-        value = getfield(status, field)
-        if !isempty(value)
-            regbr.metadata[string(field)] = value
+    empty!(regbr.metadata)
+    for triggered_check in reverse(status.triggered_checks)
+        check = triggered_check.id
+        data = triggered_check
+        if check == :version_zero
+            regbr.metadata["error"] = "Package version must be greater than 0.0.0"
+        elseif check == :new_package_label
+            add_label!(regbr, "new package")
+        elseif check == :not_standard_first_version
+            regbr.metadata["warning"] =
+                """This looks like a new registration that registers version $(data.version).
+                Ideally, you should register an initial release with 0.0.1, 0.1.0 or 1.0.0 version numbers"""
+        elseif check == :version_less_than_all_existing
+            regbr.metadata["error"] = "Version $(data.version) less than least existing version $(data.least)"
+        elseif check == :version_exists
+            regbr.metadata["error"] = "Version $(data.version) already exists"
+        elseif check == :major_release
+            add_label!(regbr, "major_release")
+        elseif check == :minor_release
+            add_label!(regbr, "minor_release")
+        elseif check == :patch_release
+            add_label!(regbr, "patch_release")
+        elseif check == :breaking
+            add_label!(regbr, "BREAKING")
+        elseif check == :version_skip
+            regbr.metadata["warning"] = "Version $(data.version) skips over $(data.next)"
+        elseif check == :change_package_name
+            regbr.metadata["error"] = "Changing package names not supported yet"
+        elseif check == :change_package_url
+            regbr.metadata["error"] = "Changing package repo URL not allowed, please submit a pull request with the URL change to the target registry and retry."
+        elseif check == :new_version
+            regbr.metadata["kind"] = "New version"
+        elseif check == :new_package
+            regbr.metadata["kind"] = "New package"
+        elseif check == :change_package_uuid
+            regbr.metadata["error"] = "Changing UUIDs is not allowed"
+        elseif check == :package_self_dep
+            regbr.metadata["error"] = "Package $(data.name) mentions itself in `[deps]`"
+        elseif check == :name_mismatch
+            regbr.metadata["error"] = "Error in (Julia)Project.toml: UUID $(data.uuid) refers to package '$(data.reg_name)' in registry but Project.toml has '$(data.project_name)'"
+        elseif check == :wrong_stdlib_uuid
+            regbr.metadata["error"] = "Error in (Julia)Project.toml: UUID $(data.project_uuid) for package $(data.name) should be $(data.stdlib_uuid)"
+        elseif check == :dependency_not_found
+            regbr.metadata["error"] = "Error in (Julia)Project.toml: Package '$(data.name)' with UUID: $(data.uuid) not found in registry or stdlib"
+        elseif check == :julia_before_07_in_compat
+            regbr.metadata["error"] = "Julia version < 0.7 not allowed in `[compat]`"
+        elseif check == :invalid_compat
+            regbr.metadata["error"] = "Following packages are mentioned in `[compat]` but not found in `[deps]` or `[extras]`:\n" * join(data.invalid_compats, "\n")
+        elseif check == :unexpected_registration_error
+            regbr.metadata["error"] = "Unexpected error in registration"
         end
     end
     return regbr
@@ -89,85 +178,88 @@ function write_registry(registry_path::AbstractString, reg::RegistryData)
     end
 end
 
-# error in regbr.metadata["errors"]
-# warning in regbr.metadata["warning"]
-# version labels for the PR in in regbr.metadata["labels"]
 function check_version!(version::VersionNumber, existing::Vector{VersionNumber},
                         status::ReturnStatus)
     if version == v"0"
-        status.error = "Package version must be greater than 0.0.0"
-        return status
+        add!(status, :version_zero)
+        haserror(status) && return
     end
 
     @assert issorted(existing)
     if isempty(existing)
-        push!(status.labels, "new package")
+        add!(status, :new_package_label)
         if !(version in [v"0.0.1", v"0.1", v"1"])
-            status.warning =
-                """This looks like a new registration that registers version $version.
-                Ideally, you should register an initial release with 0.0.1, 0.1.0 or 1.0.0 version numbers"""
+            add!(status, :not_standard_first_version, (version = version,))
         end
-        return status
     else
         idx = searchsortedlast(existing, version)
         if idx <= 0
-            status.error = "Version $version less than least existing version $(existing[1])"
-            return status
+            add!(status, :version_less_than_all_existing,
+                 (version = version, least = first(existing)))
+            return
         end
 
-        prv = existing[idx]
-        if version == prv
-            status.error = "Version $version already exists"
-            return status
+        previous = existing[idx]
+        if version == previous
+            add!(status, :version_exists, (version = version,))
+            haserror(status) && return
         end
-        nxt = if version.major != prv.major
-            push!(status.labels, "major release", "BREAKING")
-            VersionNumber(prv.major+1, 0, 0)
-        elseif version.minor != prv.minor
-            push!(status.labels, "minor release")
+        if version.major != previous.major
+            add!(status, :major_release)
+            add!(status, :breaking)
+            next = VersionNumber(previous.major + 1, 0, 0)
+        elseif version.minor != previous.minor
+            add!(status, :minor_release)
             if version.major == 0
-                push!(status.labels, "BREAKING")
+                add!(status, :breaking)
             end
-            VersionNumber(prv.major, prv.minor+1, 0)
+            next = VersionNumber(previous.major, previous.minor + 1, 0)
         else
-            push!(status.labels, "patch release")
+            add!(status, :patch_release)
             if version.major == version.minor == 0
-                push!(status.labels, "BREAKING")
+                add!(status, :breaking)
             end
-            VersionNumber(prv.major, prv.minor, prv.patch+1)
+            next = VersionNumber(previous.major, previous.minor, previous.patch + 1)
         end
-        if version > nxt
-            status.warning = "Version $version skips over $nxt"
-            return status
+        if version > next
+            add!(status, :version_skip, (version = version, next = next))
         end
     end
 
-    return status
+    return
 end
 
-findpackageerror(name::AbstractString, uuid::Base.UUID, regdata::Array{RegistryData}) =
-    findpackageerror(name, string(uuid), regdata)
+findpackageerror!(name::AbstractString, uuid::Base.UUID,
+                  regdata::Array{RegistryData}, status::ReturnStatus) =
+    findpackageerror!(name, string(uuid), regdata, status)
 
-function findpackageerror(name::AbstractString, u::AbstractString, regdata::Array{RegistryData})
-    for _registry_data in regdata
-        if haskey(_registry_data.packages, u)
-            name_in_reg = _registry_data.packages[u]["name"]
+function findpackageerror!(name::AbstractString, uuid::AbstractString,
+                           regdata::Array{RegistryData}, status::ReturnStatus)
+    for registry_data in regdata
+        if haskey(registry_data.packages, uuid)
+            name_in_reg = registry_data.packages[uuid]["name"]
             if name_in_reg != name
-                return "Error in (Julia)Project.toml: UUID $u refers to package '$name_in_reg' in registry but Project.toml has '$name'"
+                @debug(:name_mismatch)
+                add!(status, :name_mismatch,
+                     (uuid = uuid, reg_name = name_in_reg, project_name = name))
             end
-            return nothing
+            return
         end
     end
 
     if haskey(BUILTIN_PKGS, name)
-        if BUILTIN_PKGS[name] != u
-            return "Error in (Julia)Project.toml: UUID $u for package $name should be $(BUILTIN_PKGS[k])"
+        if BUILTIN_PKGS[name] != uuid
+            @debug(:wrong_stdlib_uuid)
+            add!(status, :wrong_stdlib_uuid,
+                 (project_uuid = uuid, name = name,
+                  stdlib_uuid = BUILTIN_PKGS[name]))
         end
     else
-        return "Error in (Julia)Project.toml: Package '$name' with UUID: $u not found in registry or stdlib"
+        @debug(:dependency_not_found)
+        add!(status, :dependency_not_found, (name = name, uuid = uuid))
     end
 
-    nothing
+    return
 end
 
 import Pkg.Types: VersionRange, VersionBound, VersionSpec
@@ -187,28 +279,28 @@ function find_package_in_registry(pkg::Pkg.Types.Project,
     if haskey(registry_data.packages, uuid)
         package_data = registry_data.packages[uuid]
         if package_data["name"] != pkg.name
-            err = "Changing package names not supported yet"
+            err = :change_package_name
             @debug(err)
-            status.error = err
-            return nothing
+            add!(status, err)
+            haserror(status) && return nothing
         end
         package_path = joinpath(registry_path, package_data["path"])
         repo = TOML.parsefile(joinpath(package_path, "Package.toml"))["repo"]
         if repo != package_repo
-            err = "Changing package repo URL not allowed, please submit a pull request with the URL change to the target registry and retry."
+            err = :change_package_url
             @debug(err)
-            status.error = err
-            return nothing
+            add!(status, err)
+            haserror(status) && return nothing
         end
-        status.kind = "New version"
+        add!(status, :new_version)
     else
         @debug("Package with UUID: $uuid not found in registry, checking if UUID was changed")
         for (k, v) in registry_data.packages
             if v["name"] == pkg.name
-                err = "Changing UUIDs is not allowed"
+                err = :change_package_uuid
                 @debug(err)
-                status.error = err
-                return nothing
+                add!(status, err)
+                haserror(status) && return nothing
             end
         end
 
@@ -219,7 +311,7 @@ function find_package_in_registry(pkg::Pkg.Types.Project,
         @debug("Adding package UUID to registry")
         push!(registry_data, pkg)
         write_registry(registry_file, registry_data)
-        status.kind = "New package"
+        add!(status, :new_package)
     end
 
     return package_path
@@ -268,22 +360,16 @@ function check_deps!(pkg::Pkg.Types.Project,
                      regdata::Vector{RegistryData},
                      status::ReturnStatus)
     if pkg.name in keys(pkg.deps)
-        err = "Package $(pkg.name) mentions itself in `[deps]`"
+        err = :package_self_dep
         @debug(err)
-        status.error = err
-        return
+        add!(status, err, (name = pkg.name,))
+        haserror(status) && return
     end
 
     @debug("Verifying package name and uuid in deps")
-    for (k, v) in pkg.deps
-        err = findpackageerror(k, v, regdata)
-        if err !== nothing
-            @debug(err)
-            status.error = err
-            return
-        end
+    for (name, uuid) in pkg.deps
+        findpackageerror!(name, uuid, regdata, status)
     end
-    return
 end
 
 function update_deps_file(pkg::Pkg.Types.Project,
@@ -304,79 +390,45 @@ function check_compat!(pkg::Pkg.Types.Project,
                        regpaths::Vector{String},
                        status::ReturnStatus)
     for (p, v) in pkg.compat
-        try
-            ver = Pkg.Types.semver_spec(v)
-            if p == "julia" && any(map(x->!isempty(intersect(Pkg.Types.VersionRange("0-0.6"),x)), ver.ranges))
-                err = "Julia version < 0.7 not allowed in `[compat]`"
-                @debug(err)
-                status.error = err
-                return
-            end
-        catch ex
-            if isdefined(ex, :msg)
-                err = "Error in `[compat]`: $(ex.msg)"
-                @debug(err)
-                status.error = err
-                return
-            else
-                rethrow(ex)
-            end
+        ver = Pkg.Types.semver_spec(v)
+        if p == "julia" && any(map(x -> !isempty(intersect(Pkg.Types.VersionRange("0-0.6"), x)), ver.ranges))
+            err = :julia_before_07_in_compat
+            @debug(err)
+            add!(status, err)
+            haserror(status) && return
         end
     end
 
     invalid_compats = []
-    for (n, v) in pkg.compat
-        indeps = haskey(pkg.deps, n)
-        inextras = haskey(pkg.extras, n)
-        if !indeps && !inextras && n != "julia"
-            push!(invalid_compats, n)
+    for name in keys(pkg.compat)
+        indeps = haskey(pkg.deps, name)
+        inextras = haskey(pkg.extras, name)
+        if !indeps && !inextras && name != "julia"
+            push!(invalid_compats, name)
         end
     end
     if !isempty(invalid_compats)
-        err = "Following packages are mentioned in `[compat]` but not found in `[deps]` or `[extras]`:\n" * join(invalid_compats, "\n")
+        err = :invalid_compat
         @debug(err)
-        status.error = err
-        return
+        add!(status, err, (invalid_compats = invalid_compats,))
+        haserror(status) && return
     end
 
-    for (n, v) in pkg.compat
-        if n == "julia"
+    for name in keys(pkg.compat)
+        if name == "julia"
             uuidofdep = julia_uuid
         else
-            indeps = haskey(pkg.deps, n)
-            inextras = haskey(pkg.extras, n)
+            indeps = haskey(pkg.deps, name)
+            inextras = haskey(pkg.extras, name)
 
             if indeps
-                uuidofdep = string(pkg.deps[n])
+                uuidofdep = string(pkg.deps[name])
             elseif inextras
-                uuidofdep = string(pkg.extras[n])
-            else
-                err = "Package $n mentioned in `[compat]` but not found in `[deps]` or `[extras]`"
-                @debug(err)
-                status.error = err
-                return
+                uuidofdep = string(pkg.extras[name])
             end
 
-            err = findpackageerror(n, uuidofdep, regdata)
-            if err !== nothing
-                @debug(err)
-                status.error = err
-                return
-            end
-
-            if inextras && !indeps
-                @debug("$n is a test-only dependency; omitting from Compat.toml")
-                continue
-            end
-        end
-
-        versionsfileofdep = nothing
-        for i=1:length(regdata)
-            if haskey(regdata[i].packages, uuidofdep)
-                pathofdep = regdata[i].packages[uuidofdep]["path"]
-                versionsfileofdep = joinpath(regpaths[i], pathofdep, "Versions.toml")
-                break
-            end
+            findpackageerror!(name, uuidofdep, regdata, status)
+            haserror(status) && return
         end
     end
 
@@ -394,14 +446,20 @@ function update_compat_file(pkg::Pkg.Types.Project,
     end
 
     d = Dict()
-    for (n, v) in pkg.compat
-        spec = Pkg.Types.semver_spec(v)
-        # the call to map(versionrange, ) can be removed
+    for (name, version) in pkg.compat
+        if !haskey(pkg.deps, name) && name != "julia"
+            @debug("$name is a test-only dependency; omitting from Compat.toml")
+            continue
+        end
+
+        spec = Pkg.Types.semver_spec(version)
+        # The call to `map(versionrange, )` can be removed
         # once Pkg is updated to a version including
         # https://github.com/JuliaLang/Pkg.jl/pull/1181
+        # and support for older versions is dropped.
         ranges = map(r->versionrange(r.lower, r.upper), spec.ranges)
         ranges = VersionSpec(ranges).ranges # this combines joinable ranges
-        d[n] = length(ranges) == 1 ? string(ranges[1]) : map(string, ranges)
+        d[name] = length(ranges) == 1 ? string(ranges[1]) : map(string, ranges)
     end
 
     compat_data[pkg.version] = d
@@ -452,6 +510,7 @@ function register(
     package_repo::AbstractString, pkg::Pkg.Types.Project, tree_hash::AbstractString;
     registry::AbstractString = DEFAULT_REGISTRY_URL,
     registry_deps::Vector{<:AbstractString} = AbstractString[],
+    checks_triggering_error = registrator_errors,
     push::Bool = false,
     force_reset::Bool = true,
     branch::String = registration_branch(pkg),
@@ -466,7 +525,7 @@ function register(
     regbr = RegBranch(pkg, branch)
 
     # status object
-    status = ReturnStatus()
+    status = ReturnStatus(checks_triggering_errors)
 
     # get up-to-date clone of registry
     @debug("get up-to-date clone of registry")
@@ -529,11 +588,13 @@ function register(
         update_compat_file(pkg, package_path)
 
         regtreesha = get_registrator_tree_sha()
+        # To get "kind" information. Otherwise redundant to do it here.
+        set_metadata!(regbr, status)
 
         # commit changes
         @debug("commit changes")
         message = """
-        $(status.kind): $(pkg.name) v$(pkg.version)
+        $(regbr.metadata["kind"]): $(pkg.name) v$(pkg.version)
 
         UUID: $(pkg.uuid)
         Repo: $(package_repo)
@@ -556,7 +617,7 @@ function register(
         clean_registry = false
     catch ex
         println(get_backtrace(ex))
-        status.error = "Unexpected error in registration"
+        add!(status, :unexpected_registration_error)
     finally
         if clean_registry
             @debug("cleaning up possibly inconsistent registry", registry_path=showsafe(registry_path), err=showsafe(err))

@@ -131,21 +131,25 @@ end
 @testset "check_version!" begin
     import RegistryTools: ReturnStatus, check_version!, haserror
     import Pkg.Types: Project
+    function hascheck(status::ReturnStatus, check)
+        return check in (c.id for c in status.triggered_checks)
+    end
 
     for ver in [v"0.0.2", v"0.3.2", v"4.3.2"]
         status = ReturnStatus()
         check_version!(ver, VersionNumber[], status)
-        @test !isempty(status.warning)
+        @test hascheck(status, :not_standard_first_version)
+        @test hascheck(status, :new_package_label)
+        @test length(status.triggered_checks) == 2
         @test !haserror(status)
-        @test status.labels == ["new package"]
     end
 
     for ver in [v"0.0.1", v"0.1.0", v"1.0.0"]
         status = ReturnStatus()
         check_version!(ver, VersionNumber[], status)
-        @test isempty(status.warning)
+        @test hascheck(status, :new_package_label)
+        @test length(status.triggered_checks) == 1
         @test !haserror(status)
-        @test status.labels == ["new package"]
     end
 
     versions_list = [v"0.0.5", v"0.1.0", v"0.1.5", v"1.0.0"]
@@ -153,48 +157,54 @@ end
         ver = v"0.0.4"
         status = ReturnStatus()
         check_version!(ver, versions_list, status)
-        @test haserror(status)
-        @test isempty(status.warning)
+        @test hascheck(status, :version_less_than_all_existing)
+        @test length(status.triggered_checks) == 1
+        @test !haserror(status)
     end
 
     let    # Existing version
         ver = v"0.0.5"
         status = ReturnStatus()
         check_version!(ver, versions_list, status)
+        @test hascheck(status, :version_exists)
+        @test length(status.triggered_checks) == 1
         @test haserror(status)
-        @test isempty(status.warning)
     end
 
     # Non-existing version
     for (ver, type) in [(v"0.1.1", "patch"), (v"0.1.6", "patch"), (v"1.0.1", "patch"), (v"1.1.0", "minor")]
         status = ReturnStatus()
         check_version!(ver, versions_list, status)
+        @test hascheck(status, Symbol(type, "_release"))
+        @test length(status.triggered_checks) == 1
         @test !haserror(status)
-        @test isempty(status.warning)
-        @test status.labels == ["$(type) release"]
     end
     for (ver, type) in [(v"0.0.6", "patch"), (v"0.2.0", "minor"), (v"2.0.0", "major")]
         status = ReturnStatus()
         check_version!(ver, versions_list, status)
+        @test hascheck(status, Symbol(type, "_release"))
+        @test hascheck(status, :breaking)
+        @test length(status.triggered_checks) == 2
         @test !haserror(status)
-        @test isempty(status.warning)
-        @test status.labels == ["$(type) release", "BREAKING"]
     end
 
     # Skip a version
     for (ver, type) in [(v"0.1.2", "patch"), (v"0.1.7", "patch"), (v"1.0.2", "patch"), (v"1.2.0", "minor")]
         status = ReturnStatus()
         check_version!(ver, versions_list, status)
+        @test hascheck(status, Symbol(type, "_release"))
+        @test hascheck(status, :version_skip)
+        @test length(status.triggered_checks) == 2
         @test !haserror(status)
-        @test !isempty(status.warning)
-        @test status.labels == ["$(type) release"]
     end
     for (ver, type) in [(v"0.0.7", "patch"), (v"0.3.0", "minor"), (v"3.0.0", "major")]
         status = ReturnStatus()
         check_version!(ver, versions_list, status)
+        @test hascheck(status, Symbol(type, "_release"))
+        @test hascheck(status, :breaking)
+        @test hascheck(status, :version_skip)
+        @test length(status.triggered_checks) == 3
         @test !haserror(status)
-        @test !isempty(status.warning)
-        @test status.labels == ["$(type) release", "BREAKING"]
     end
 end
 
