@@ -305,7 +305,7 @@ function find_package_in_registry(pkg::Pkg.Types.Project,
         end
 
         @debug("Creating directory for new package $(pkg.name)")
-        package_path = joinpath(registry_path, package_relpath(registry_data, pkg))
+        package_path = joinpath(registry_path, package_relpath(pkg))
         mkpath(package_path)
 
         @debug("Adding package UUID to registry")
@@ -485,6 +485,47 @@ function get_registrator_tree_sha()
     return regtreesha
 end
 
+function check_and_update_registry_files(pkg, package_repo, tree_hash,
+                                         registry_path, registry_deps_paths,
+                                         status)
+    # find package in registry
+    @debug("find package in registry")
+    registry_file = joinpath(registry_path, "Registry.toml")
+    registry_data = parse_registry(registry_file)
+    package_path = find_package_in_registry(pkg, package_repo,
+                                            registry_file, registry_path,
+                                            registry_data, status)
+    haserror(status) && return
+
+    # update package data: package file
+    @debug("update package data: package file")
+    update_package_file(pkg, package_repo, package_path)
+
+    # update package data: versions file
+    @debug("update package data: versions file")
+    versions_file, versions_data = get_versions_file(package_path)
+    check_versions!(pkg, versions_data, status)
+    haserror(status) && return
+    update_versions_file(pkg, versions_file, versions_data, tree_hash)
+
+    # update package data: deps file
+    @debug("update package data: deps file")
+    registry_deps_data = map(registry_deps_paths) do registry_path
+        parse_registry(joinpath(registry_path, "Registry.toml"))
+    end
+    regdata = [registry_data; registry_deps_data]
+    check_deps!(pkg, regdata, status)
+    haserror(status) && return
+    update_deps_file(pkg, package_path)
+
+    # update package data: compat file
+    @debug("check compat section")
+    regpaths = [registry_path; registry_deps_paths]
+    check_compat!(pkg, regdata, regpaths, status)
+    haserror(status) && return
+    update_compat_file(pkg, package_path)
+end
+
 """
     register(package_repo, pkg, tree_hash; registry, registry_deps, push, gitconfig)
 
@@ -550,42 +591,10 @@ function register(
             run(pipeline(`$git checkout -f $branch`; stdout=devnull))
         end
 
-        # find package in registry
-        @debug("find package in registry")
-        registry_file = joinpath(registry_path, "Registry.toml")
-        registry_data = parse_registry(registry_file)
-        package_path = find_package_in_registry(pkg, package_repo,
-                                                registry_file, registry_path,
-                                                registry_data, status)
+        check_and_update_registry_files(pkg, package_repo, tree_hash,
+                                        registry_path, registry_deps_paths,
+                                        status)
         haserror(status) && return set_metadata!(regbr, status)
-
-        # update package data: package file
-        @debug("update package data: package file")
-        update_package_file(pkg, package_repo, package_path)
-
-        # update package data: versions file
-        @debug("update package data: versions file")
-        versions_file, versions_data = get_versions_file(package_path)
-        check_versions!(pkg, versions_data, status)
-        haserror(status) && return set_metadata!(regbr, status)
-        update_versions_file(pkg, versions_file, versions_data, tree_hash)
-
-        # update package data: deps file
-        @debug("update package data: deps file")
-        registry_deps_data = map(registry_deps_paths) do registry_path
-            parse_registry(joinpath(registry_path, "Registry.toml"))
-        end
-        regdata = [registry_data; registry_deps_data]
-        check_deps!(pkg, regdata, status)
-        haserror(status) && return set_metadata!(regbr, status)
-        update_deps_file(pkg, package_path)
-
-        # update package data: compat file
-        @debug("check compat section")
-        regpaths = [registry_path; registry_deps_paths]
-        check_compat!(pkg, regdata, regpaths, status)
-        haserror(status) && return set_metadata!(regbr, status)
-        update_compat_file(pkg, package_path)
 
         regtreesha = get_registrator_tree_sha()
         # To get "kind" information. Otherwise redundant to do it here.
@@ -602,6 +611,8 @@ function register(
 
         Registrator tree SHA: $(regtreesha)
         """
+        registry_file = joinpath(registry_path, "Registry.toml")
+        package_path = joinpath(registry_path, package_relpath(pkg))
         run(pipeline(`$git add -- $package_path`; stdout=devnull))
         run(pipeline(`$git add -- $registry_file`; stdout=devnull))
         run(pipeline(`$git commit -m $message`; stdout=devnull))

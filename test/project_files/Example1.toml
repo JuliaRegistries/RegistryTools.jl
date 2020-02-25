@@ -1,0 +1,15 @@
+name = "Example"
+uuid = "d7508571-2240-4c50-b21c-240e414cc6d2"
+version = "1.0.0"
+
+[deps]
+UUIDs = "cf7118a7-6976-5b1a-9a39-7adc72f591a4"
+
+[compat]
+julia = "1.1"
+
+[extras]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test"]

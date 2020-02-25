@@ -290,4 +290,203 @@ end
     end
 end
 
+@testset "registry updates" begin
+    import RegistryTools: RegistryData, ReturnStatus, haserror,
+                          write_registry, find_package_in_registry,
+                          check_and_update_registry_files,
+                          RegBranch, set_metadata!
+    import Pkg.Types: read_project
+    registry_update_tests =
+        [
+            # Add one simple package.
+            (project_files = ["Example1"],
+             status = Symbol[:new_package, :new_package_label],
+             regbranch = (error = false, warning = false,
+                          kind = "New package", labels = String["new package"]))
+
+            # Increase patch revision.
+            (project_files = ["Example1", "Example2"],
+             status = Symbol[:new_version, :patch_release],
+             regbranch = (error = false, warning = false,
+                          kind = "New version",
+                          labels = String["patch_release"]))
+
+            # Increase minor revision.
+            (project_files = ["Example1", "Example2", "Example3"],
+             status = Symbol[:new_version, :minor_release],
+             regbranch = (error = false, warning = false,
+                          kind = "New version",
+                          labels = String["minor_release"]))
+
+            # Increase major revision.
+            (project_files = ["Example1", "Example4"],
+             status = Symbol[:new_version, :major_release, :breaking],
+             regbranch = (error = false, warning = false,
+                          kind = "New version",
+                          labels = String["major_release", "BREAKING"]))
+
+            # Adding a minor revision after next major revision has
+            # been registered.
+            (project_files = ["Example1", "Example4", "Example3"],
+             status = Symbol[:new_version, :minor_release],
+             regbranch = (error = false, warning = false,
+                          kind = "New version",
+                          labels = String["minor_release"]))
+
+            # Adding a revision that comes before all registered versions.
+            (project_files = ["Example2", "Example4", "Example3", "Example1"],
+             status = Symbol[:new_version, :version_less_than_all_existing],
+             regbranch = (error = true, warning = false,
+                          kind = "New version", labels = String[]))
+
+            # Non-standard first version.
+            (project_files = ["Example2"],
+             status = Symbol[:new_package, :new_package_label,
+                             :not_standard_first_version],
+             regbranch = (error = false, warning = true,
+                          kind = "New package", labels = String["new package"]))
+
+            # Version zero.
+            (project_files = ["Example5"],
+             status = Symbol[:new_package, :new_package_label, :version_zero,
+                             :not_standard_first_version],
+             regbranch = (error = true, warning = true,
+                          kind = "New package", labels = String["new package"]))
+
+            # Skipped versions.
+            (project_files = ["Example1", "Example6"],
+             status = Symbol[:new_version, :minor_release, :version_skip],
+             regbranch = (error = false, warning = true,
+                          kind = "New version",
+                          labels = String["minor_release"]))
+
+            # Adding an existing version.
+            (project_files = ["Example1", "Example1"],
+             status = Symbol[:new_version, :version_exists],
+             regbranch = (error = true, warning = false,
+                          kind = "New version",
+                          labels = String[]))
+
+            # Changing name.
+            (project_files = ["Example1", "Example7"],
+             status = Symbol[:change_package_name],
+             regbranch = (error = true, warning = false,
+                          kind = "",
+                          labels = String[]))
+
+            # Changing uuid.
+            (project_files = ["Example1", "Example8"],
+             status = Symbol[:change_package_uuid],
+             regbranch = (error = true, warning = false,
+                          kind = "",
+                          labels = String[]))
+
+            # Incorrect stdlib uuid.
+            (project_files = ["Example9"],
+             status = Symbol[:new_package, :new_package_label,
+                             :wrong_stdlib_uuid],
+             regbranch = (error = true, warning = false,
+                          kind = "New package",
+                          labels = String["new package"]))
+
+            # Dependency on itself.
+            (project_files = ["Example10"],
+             status = Symbol[:new_package, :new_package_label,
+                             :package_self_dep],
+             regbranch = (error = true, warning = false,
+                          kind = "New package",
+                          labels = String["new package"]))
+
+            # Incorrect spelling of an stdlib.
+            # (Arguably this should complain differently since the
+            # UUID is known.)
+            (project_files = ["Example11"],
+             status = Symbol[:new_package, :new_package_label,
+                             :dependency_not_found],
+             regbranch = (error = true, warning = false,
+                          kind = "New package",
+                          labels = String["new package"]))
+
+            # Missing dependency.
+            (project_files = ["Example12"],
+             status = Symbol[:new_package, :new_package_label,
+                             :dependency_not_found],
+             regbranch = (error = true, warning = false,
+                          kind = "New package",
+                          labels = String["new package"]))
+
+            # Dependency no longer missing.
+            (project_files = ["Dep1", "Example12"],
+             status = Symbol[:new_package, :new_package_label],
+             regbranch = (error = false, warning = false,
+                          kind = "New package",
+                          labels = String["new package"]))
+
+            # Dependency not missing but incorrectly spelled.
+            (project_files = ["Dep1", "Example13"],
+             status = Symbol[:new_package, :new_package_label, :name_mismatch],
+             regbranch = (error = true, warning = false,
+                          kind = "New package",
+                          labels = String["new package"]))
+
+            # Compatibility with Julia before 0.7.
+            (project_files = ["Example14"],
+             status = Symbol[:new_package, :new_package_label,
+                             :julia_before_07_in_compat],
+             regbranch = (error = true, warning = false,
+                          kind = "New package",
+                          labels = String["new package"]))
+
+            # Change package repo.
+            (project_files = ["Example1", "Example2"],
+             modify_package_repo = "Example2",
+             status = Symbol[:new_version, :patch_release, :change_package_url],
+             regbranch = (error = true, warning = false,
+                          kind = "New version",
+                          labels = String["patch_release"]))
+        ]
+
+
+    mktempdir(@__DIR__) do temp_dir
+        registry_path = joinpath(temp_dir, "registry")
+        registry_file = joinpath(registry_path, "Registry.toml")
+        projects_path = joinpath(@__DIR__, "project_files")
+        registry_deps_paths = String[]
+        tree_hash = repeat("0", 40)
+        for test_data in registry_update_tests
+            # Clean up from previous iteration.
+            isdir(registry_path) && rm(registry_path, recursive = true)
+            mkpath(registry_path)
+            # Start with an empty registry.
+            registry_data = RegistryData("TestRegistry",
+                                         "d4e2f5cd-0f48-4704-9988-f1754e755b45")
+            write_registry(registry_file, registry_data)
+            local status, regbr
+            # Register some packages.
+            for project in test_data.project_files
+                project_file = joinpath(projects_path, "$(project).toml")
+                pkg = read_project(project_file)
+                # Create status object.
+                status = ReturnStatus()
+                regbr = RegBranch(pkg, "")
+                package_repo = string("http://example.com/$(pkg.name).git")
+                if get(test_data, :modify_package_repo, "") == project
+                    package_repo = string("http://example.org/$(pkg.name).git")
+                end
+                check_and_update_registry_files(pkg, package_repo, tree_hash,
+                                                registry_path,
+                                                registry_deps_paths, status)
+                haserror(status) && break
+            end
+            # Test the return status of the last package registration.
+            @test sort([check.id for check in status.triggered_checks]) == sort(test_data.status)
+            set_metadata!(regbr, status)
+            @test haskey(regbr.metadata, "error") == test_data.regbranch.error
+            @test haskey(regbr.metadata, "warning") == test_data.regbranch.warning
+            @test get(regbr.metadata, "kind", "") == test_data.regbranch.kind
+            @test sort(get(regbr.metadata, "labels", String[])) == sort(test_data.regbranch.labels)
+        end
+    end
+end
+
 end
