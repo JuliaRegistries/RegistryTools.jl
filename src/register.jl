@@ -47,8 +47,6 @@ for the project file in that tree and a hash string for the tree.
 #     end
 # end
 
-const julia_uuid = "1222c4b2-2114-5bfd-aeef-88e4692bbb3e"
-
 # These can compromise the integrity of the registry and cannot be
 # opted out of.
 const mandatory_errors = [:version_exists,
@@ -233,6 +231,10 @@ findpackageerror!(name::AbstractString, uuid::Base.UUID,
                   regdata::Array{RegistryData}, status::ReturnStatus) =
     findpackageerror!(name, string(uuid), regdata, status)
 
+# Check that `uuid` is found in `regdata` OR `name` is found in
+# `BUILTIN_PKGS` (i.e. stdlibs). In the former case, check that `name`
+# matches the found uuid and in the latter case that `uuid` matches
+# the found name.
 function findpackageerror!(name::AbstractString, uuid::AbstractString,
                            regdata::Array{RegistryData}, status::ReturnStatus)
     for registry_data in regdata
@@ -389,9 +391,9 @@ function check_compat!(pkg::Pkg.Types.Project,
                        regdata::Vector{RegistryData},
                        regpaths::Vector{String},
                        status::ReturnStatus)
-    for (p, v) in pkg.compat
-        ver = Pkg.Types.semver_spec(v)
-        if p == "julia" && any(map(x -> !isempty(intersect(Pkg.Types.VersionRange("0-0.6"), x)), ver.ranges))
+    if haskey(pkg.compat, "julia")
+        ver = Pkg.Types.semver_spec(pkg.compat["julia"])
+        if any(map(x -> !isempty(intersect(Pkg.Types.VersionRange("0-0.6"), x)), ver.ranges))
             err = :julia_before_07_in_compat
             @debug(err)
             add!(status, err)
@@ -399,6 +401,9 @@ function check_compat!(pkg::Pkg.Types.Project,
         end
     end
 
+    # Note: These checks are meaningless for Julia >= 1.2 since
+    # Pkg.Types.load_project will give an error if there are compat
+    # entries not mentioned in deps, nor in extras.
     invalid_compats = []
     for name in keys(pkg.compat)
         indeps = haskey(pkg.deps, name)
@@ -414,20 +419,27 @@ function check_compat!(pkg::Pkg.Types.Project,
         haserror(status) && return
     end
 
+    # Note: `findpackageerror` has already been run for all entries in
+    # deps so doing it again for the intersection of compat and deps
+    # is redundant. Doing it for the intersection of compat and extras
+    # is meaningful but it is unclear why not just do it for all
+    # entries in extras at the same time it's done for all entries in
+    # deps. Alternatively it can be skipped entirely since nothing
+    # that is in extras only will be stored in the registry files
+    # anyway.
     for name in keys(pkg.compat)
-        if name == "julia"
-            uuidofdep = julia_uuid
-        else
+        if name != "julia"
             indeps = haskey(pkg.deps, name)
             inextras = haskey(pkg.extras, name)
 
             if indeps
                 uuidofdep = string(pkg.deps[name])
+                findpackageerror!(name, uuidofdep, regdata, status)
             elseif inextras
                 uuidofdep = string(pkg.extras[name])
+                findpackageerror!(name, uuidofdep, regdata, status)
             end
 
-            findpackageerror!(name, uuidofdep, regdata, status)
             haserror(status) && return
         end
     end
