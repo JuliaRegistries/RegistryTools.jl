@@ -437,6 +437,31 @@ end
                           kind = "New package",
                           labels = String["new package"]))
 
+            # Compat for non-dependency. On Julia 1.2 and later this
+            # gives an error already in `read_project`, so only run it
+            # on Julia 1.1.
+            (project_files = ["Example15"],
+             skip_for_newer_julia = true,
+             status = Symbol[:new_package, :new_package_label,
+                             :invalid_compat],
+             regbranch = (error = true, warning = false,
+                          kind = "New package",
+                          labels = String["new package"]))
+
+            # Compat entry for package in deps.
+            (project_files = ["Dep1", "Example16"],
+             status = Symbol[:new_package, :new_package_label],
+             regbranch = (error = false, warning = false,
+                          kind = "New package",
+                          labels = String["new package"]))
+
+            # Compat entry for package in extras.
+            (project_files = ["Dep1", "Example17"],
+             status = Symbol[:new_package, :new_package_label],
+             regbranch = (error = false, warning = false,
+                          kind = "New package",
+                          labels = String["new package"]))
+
             # Change package repo.
             (project_files = ["Example1", "Example2"],
              modify_package_repo = "Example2",
@@ -454,6 +479,9 @@ end
         registry_deps_paths = String[]
         tree_hash = repeat("0", 40)
         for test_data in registry_update_tests
+            if haskey(test_data, :skip_for_newer_julia) && VERSION >= v"1.2"
+                continue
+            end
             # Clean up from previous iteration.
             isdir(registry_path) && rm(registry_path, recursive = true)
             mkpath(registry_path)
