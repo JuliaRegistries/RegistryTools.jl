@@ -263,7 +263,7 @@ end
         pkg = Project(version = v"1.0.0", deps = deps)
         update_versions_file(pkg, joinpath(temp_dir, "Versions.toml"),
                              Dict{String, Any}(), repeat("0", 40))
-        update_deps_file(pkg, temp_dir)
+        update_deps_file(pkg, temp_dir, VersionNumber[])
         deps_file = joinpath(temp_dir, "Deps.toml")
         @test isfile(deps_file)
         @test read(deps_file, String) == """
@@ -280,7 +280,7 @@ end
         pkg = Project(version = v"1.0.0", compat = compat)
         update_versions_file(pkg, joinpath(temp_dir, "Versions.toml"),
                              Dict{String, Any}(), repeat("0", 40))
-        update_compat_file(pkg, temp_dir)
+        update_compat_file(pkg, temp_dir, VersionNumber[])
         compat_file = joinpath(temp_dir, "Compat.toml")
         @test isfile(compat_file)
         @test read(compat_file, String) == """

@@ -344,6 +344,7 @@ function check_versions!(pkg::Pkg.Types.Project,
                          status::ReturnStatus)
     versions = sort!([VersionNumber(v) for v in keys(versions_data)])
     check_version!(pkg.version, versions, status)
+    return versions
 end
 
 function update_versions_file(pkg::Pkg.Types.Project,
@@ -374,11 +375,17 @@ function check_deps!(pkg::Pkg.Types.Project,
     end
 end
 
+# Note that Compress.load should load with respect to Versions.toml
+# before update and Compress.save should save with respect to
+# Versions.toml after update. This is handled with the `old_versions'
+# argument and the assumption that Versions.toml has been updated with
+# the new version before calling this function.
 function update_deps_file(pkg::Pkg.Types.Project,
-                          package_path::AbstractString)
+                          package_path::AbstractString,
+                          old_versions::Vector{VersionNumber})
     deps_file = joinpath(package_path, "Deps.toml")
     if isfile(deps_file)
-        deps_data = Compress.load(deps_file)
+        deps_data = Compress.load(deps_file, old_versions)
     else
         deps_data = Dict()
     end
@@ -447,12 +454,15 @@ function check_compat!(pkg::Pkg.Types.Project,
     return
 end
 
+# See the comments for `update_deps_file` for the rationale for the
+# `old_versions` argument.
 function update_compat_file(pkg::Pkg.Types.Project,
-                            package_path::AbstractString)
+                            package_path::AbstractString,
+                            old_versions::Vector{VersionNumber})
     @debug("update package data: compat file")
     compat_file = joinpath(package_path, "Compat.toml")
     if isfile(compat_file)
-        compat_data = Compress.load(compat_file)
+        compat_data = Compress.load(compat_file, old_versions)
     else
         compat_data = Dict()
     end
@@ -516,7 +526,7 @@ function check_and_update_registry_files(pkg, package_repo, tree_hash,
     # update package data: versions file
     @debug("update package data: versions file")
     versions_file, versions_data = get_versions_file(package_path)
-    check_versions!(pkg, versions_data, status)
+    old_versions = check_versions!(pkg, versions_data, status)
     haserror(status) && return
     update_versions_file(pkg, versions_file, versions_data, tree_hash)
 
@@ -528,14 +538,14 @@ function check_and_update_registry_files(pkg, package_repo, tree_hash,
     regdata = [registry_data; registry_deps_data]
     check_deps!(pkg, regdata, status)
     haserror(status) && return
-    update_deps_file(pkg, package_path)
+    update_deps_file(pkg, package_path, old_versions)
 
     # update package data: compat file
     @debug("check compat section")
     regpaths = [registry_path; registry_deps_paths]
     check_compat!(pkg, regdata, regpaths, status)
     haserror(status) && return
-    update_compat_file(pkg, package_path)
+    update_compat_file(pkg, package_path, old_versions)
 end
 
 """
