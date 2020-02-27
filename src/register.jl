@@ -588,7 +588,7 @@ function register(
     regbr = RegBranch(pkg, branch)
 
     # status object
-    status = ReturnStatus(checks_triggering_errors)
+    status = ReturnStatus(checks_triggering_error)
 
     # get up-to-date clone of registry
     @debug("get up-to-date clone of registry")

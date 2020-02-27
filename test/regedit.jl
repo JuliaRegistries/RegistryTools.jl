@@ -2,7 +2,8 @@ using RegistryTools: DEFAULT_REGISTRY_URL,
     parse_registry,
     showsafe,
     registration_branch,
-    get_registry
+    get_registry,
+    gitcmd
 using LibGit2
 using Pkg.TOML
 using Pkg.Types: Project
@@ -516,5 +517,74 @@ end
         end
     end
 end
+
+# Helper function for the next testset.
+function create_and_populate_registry(registry_path, registry_name,
+                                      registry_uuid, package)
+    # Create an empty registry.
+    mkpath(registry_path)
+    registry_file = joinpath(registry_path, "Registry.toml")
+    registry_data = RegistryData(registry_name, registry_uuid)
+    write_registry(registry_file, registry_data)
+
+    # Add a package.
+    projects_path = joinpath(@__DIR__, "project_files")
+    project_file = joinpath(projects_path, "$(package).toml")
+    pkg = read_project(project_file)
+    package_repo = string("http://example.com/$(pkg.name).git")
+    tree_hash = repeat("0", 40)
+    registry_deps_paths = String[]
+    status = ReturnStatus()
+    check_and_update_registry_files(pkg, package_repo, tree_hash,
+                                    registry_path,
+                                    registry_deps_paths, status)
+
+    # Turn the registry into a git repository.
+    git = gitcmd(registry_path, TEST_GITCONFIG)
+    run(`$git init`)
+    run(`$git add .`)
+    run(`$git commit -m .`)
+
+    return status
+end
+
+# Test the `register` function in its entirety as well as having a
+# dependency in a different registry.
+#
+# The strategy is to first create two registries and populate them
+# with one package each. Then `register` is called to register a new
+# version of one of the packages with a dependency to the other
+# package. The registration is pushed to a new branch via a file URL.
+@testset "register" begin
+    mktempdir(@__DIR__) do temp_dir
+        registry1_path = joinpath(temp_dir, "Registry1")
+        status = create_and_populate_registry(registry1_path, "Registry1",
+                                              "7e1d4fce-5fe6-405e-8bac-078d4138e9a2",
+                                              "Example1")
+        @test !haserror(status)
+
+        registry2_path = joinpath(temp_dir, "Registry2")
+        status = create_and_populate_registry(registry2_path, "Registry2",
+                                              "a5a8be26-c942-4674-beee-533a0e81ac1d",
+                                              "Dep1")
+        @test !haserror(status)
+
+        projects_path = joinpath(@__DIR__, "project_files")
+        project_file = joinpath(projects_path, "Example18.toml")
+        pkg = read_project(project_file)
+        package_repo = string("http://example.com/$(pkg.name).git")
+        tree_hash = repeat("0", 40)
+        registry_repo = "file://$(registry1_path)"
+        deps_repo = "file://$(registry2_path)"
+        regbr = register(package_repo, pkg, tree_hash, registry = registry_repo,
+                         registry_deps = [deps_repo], push = true,
+                         gitconfig = TEST_GITCONFIG)
+        @test !haskey(regbr.metadata, "error") && !haskey(regbr.metadata, "warning")
+        git = gitcmd(registry1_path, TEST_GITCONFIG)
+        branches = readlines(`$git branch`)
+        @test length(branches) == 2
+    end
+end
+
 
 end
