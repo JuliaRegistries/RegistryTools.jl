@@ -148,8 +148,10 @@ function TOML.print(io::IO, reg::RegistryData)
     nothing
 end
 
+# Not using `joinpath` here since we don't want backslashes in
+# Registry.toml when running on Windows.
 function package_relpath(pkg::Pkg.Types.Project)
-    joinpath("$(uppercase(pkg.name[1]))", pkg.name)
+    string(uppercase(pkg.name[1]), "/", pkg.name)
 end
 
 function Base.push!(reg::RegistryData, pkg::Pkg.Types.Project)
