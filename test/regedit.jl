@@ -226,6 +226,40 @@ end
     end
 end
 
+function create_empty_registry(registry_path, registry_name, registry_uuid)
+    mkpath(registry_path)
+    registry_file = joinpath(registry_path, "Registry.toml")
+    registry_data = RegistryTools.RegistryData(registry_name, registry_uuid)
+    RegistryTools.write_registry(registry_file, registry_data)
+end
+
+@testset "find_package_in_registry" begin
+    import RegistryTools: find_package_in_registry
+    mktempdir(@__DIR__) do temp_dir
+        registry_path = temp_dir
+        registry_uuid = "d4e2f5cd-0f48-4704-9988-f1754e755b45"
+        create_empty_registry(registry_path, "TestRegistry", registry_uuid)
+        registry_file = joinpath(registry_path, "Registry.toml")
+        registry_data = parse_registry(registry_file)
+        package_uuid = "698ec630-83b2-4a6d-81d4-a10176273030"
+        pkg = Project(Dict("name" => "Example",
+                           "uuid" => package_uuid))
+        status = ReturnStatus()
+
+        find_package_in_registry(pkg, "", registry_file, registry_path,
+                                 registry_data, status)
+        print(read(registry_file, String))
+        @test read(registry_file, String) == """
+                                             name = "TestRegistry"
+                                             uuid = "$(registry_uuid)"
+
+                                             [packages]
+                                             $(package_uuid) = { name = "Example", path = "E/Example" }
+                                             """
+        @test isdir(joinpath(registry_path, "E", "Example"))
+    end
+end
+
 @testset "versions_file" begin
     import RegistryTools: get_versions_file, update_versions_file, check_versions!
     mktempdir(@__DIR__) do temp_dir
@@ -475,7 +509,6 @@ end
 
     mktempdir(@__DIR__) do temp_dir
         registry_path = joinpath(temp_dir, "registry")
-        registry_file = joinpath(registry_path, "Registry.toml")
         projects_path = joinpath(@__DIR__, "project_files")
         registry_deps_paths = String[]
         tree_hash = repeat("0", 40)
@@ -485,11 +518,9 @@ end
             end
             # Clean up from previous iteration.
             isdir(registry_path) && rm(registry_path, recursive = true)
-            mkpath(registry_path)
             # Start with an empty registry.
-            registry_data = RegistryData("TestRegistry",
-                                         "d4e2f5cd-0f48-4704-9988-f1754e755b45")
-            write_registry(registry_file, registry_data)
+            create_empty_registry(registry_path, "TestRegistry",
+                                  "d4e2f5cd-0f48-4704-9988-f1754e755b45")
             local status, regbr
             # Register some packages.
             for project in test_data.project_files
@@ -522,10 +553,7 @@ end
 function create_and_populate_registry(registry_path, registry_name,
                                       registry_uuid, package)
     # Create an empty registry.
-    mkpath(registry_path)
-    registry_file = joinpath(registry_path, "Registry.toml")
-    registry_data = RegistryData(registry_name, registry_uuid)
-    write_registry(registry_file, registry_data)
+    create_empty_registry(registry_path, registry_name, registry_uuid)
 
     # Add a package.
     projects_path = joinpath(@__DIR__, "project_files")
