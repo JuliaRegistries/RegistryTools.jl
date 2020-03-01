@@ -125,7 +125,7 @@ end
         @test length(registry_data.packages) == 1
         @test haskey(registry_data.packages, string(example.uuid))
         @test registry_data.packages[string(example.uuid)]["name"] == "Example"
-        @test registry_data.packages[string(example.uuid)]["path"] == joinpath("E", "Example")
+        @test registry_data.packages[string(example.uuid)]["path"] == "E/Example"
     end
 end
 
