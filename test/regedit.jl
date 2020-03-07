@@ -614,5 +614,33 @@ end
     end
 end
 
+@testset "find_registered_version" begin
+    mktempdir(@__DIR__) do temp_dir
+        registry_path = temp_dir
+
+        # Create an empty registry.
+        create_empty_registry(registry_path, "Registry1",
+                              "7e1d4fce-5fe6-405e-8bac-078d4138e9a2")
+
+        # Add a package.
+        projects_path = joinpath(@__DIR__, "project_files")
+        project_file = joinpath(projects_path, "Example1.toml")
+        pkg = read_project(project_file)
+        @test find_registered_version(pkg, registry_path) == ""
+
+        package_repo = string("http://example.com/$(pkg.name).git")
+        tree_hash = "7dd821daaae58ddf9fee53e00aa1aab33794d130"
+        registry_deps_paths = String[]
+        status = ReturnStatus()
+        check_and_update_registry_files(pkg, package_repo, tree_hash,
+                                        registry_path,
+                                        registry_deps_paths, status)
+
+        @test find_registered_version(pkg, registry_path) == tree_hash
+        project_file = joinpath(projects_path, "Example2.toml")
+        pkg = read_project(project_file)
+        @test find_registered_version(pkg, registry_path) == ""
+    end
+end
 
 end
