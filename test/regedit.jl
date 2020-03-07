@@ -246,7 +246,7 @@ end
                            "uuid" => package_uuid))
         status = ReturnStatus()
 
-        find_package_in_registry(pkg, "", registry_file, registry_path,
+        find_package_in_registry(pkg, registry_file, registry_path,
                                  registry_data, status)
         print(read(registry_file, String))
         @test read(registry_file, String) == """
@@ -327,8 +327,7 @@ end
 
 @testset "registry updates" begin
     import RegistryTools: RegistryData, ReturnStatus, haserror,
-                          write_registry, find_package_in_registry,
-                          check_and_update_registry_files,
+                          write_registry, check_and_update_registry_files,
                           RegBranch, set_metadata!
     import Pkg.Types: read_project
     registry_update_tests =

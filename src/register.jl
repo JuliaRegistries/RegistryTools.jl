@@ -272,7 +272,6 @@ function versionrange(lo::VersionBound, hi::VersionBound)
 end
 
 function find_package_in_registry(pkg::Pkg.Types.Project,
-                                  package_repo::AbstractString,
                                   registry_file::AbstractString,
                                   registry_path::AbstractString,
                                   registry_data::RegistryData,
@@ -287,13 +286,6 @@ function find_package_in_registry(pkg::Pkg.Types.Project,
             haserror(status) && return nothing
         end
         package_path = joinpath(registry_path, package_data["path"])
-        repo = TOML.parsefile(joinpath(package_path, "Package.toml"))["repo"]
-        if repo != package_repo
-            err = :change_package_url
-            @debug(err)
-            add!(status, err)
-            haserror(status) && return nothing
-        end
         add!(status, :new_version)
     else
         @debug("Package with UUID: $uuid not found in registry, checking if UUID was changed")
@@ -317,6 +309,23 @@ function find_package_in_registry(pkg::Pkg.Types.Project,
     end
 
     return package_path
+end
+
+
+function check_package!(package_repo::AbstractString,
+                        package_path::AbstractString,
+                        status::ReturnStatus)
+    package_file = joinpath(package_path, "Package.toml")
+    # If this is a registration of a new package, the package file has
+    # not been created yet.
+    if isfile(package_file)
+        repo = TOML.parsefile(package_file)["repo"]
+        if repo != package_repo
+            err = :change_package_url
+            @debug(err)
+            add!(status, err)
+        end
+    end
 end
 
 function update_package_file(pkg::Pkg.Types.Project,
@@ -514,13 +523,14 @@ function check_and_update_registry_files(pkg, package_repo, tree_hash,
     @debug("find package in registry")
     registry_file = joinpath(registry_path, "Registry.toml")
     registry_data = parse_registry(registry_file)
-    package_path = find_package_in_registry(pkg, package_repo,
-                                            registry_file, registry_path,
+    package_path = find_package_in_registry(pkg, registry_file, registry_path,
                                             registry_data, status)
     haserror(status) && return
 
     # update package data: package file
     @debug("update package data: package file")
+    check_package!(package_repo, package_path, status)
+    haserror(status) && return
     update_package_file(pkg, package_repo, package_path)
 
     # update package data: versions file
