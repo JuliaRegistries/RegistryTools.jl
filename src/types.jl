@@ -148,13 +148,15 @@ function TOML.print(io::IO, reg::RegistryData)
     nothing
 end
 
-function package_relpath(reg::RegistryData, pkg::Pkg.Types.Project)
-    joinpath("$(uppercase(pkg.name[1]))", pkg.name)
+# Not using `joinpath` here since we don't want backslashes in
+# Registry.toml when running on Windows.
+function package_relpath(pkg::Pkg.Types.Project)
+    string(uppercase(pkg.name[1]), "/", pkg.name)
 end
 
 function Base.push!(reg::RegistryData, pkg::Pkg.Types.Project)
     reg.packages[string(pkg.uuid)] = Dict(
-        "name" => pkg.name, "path" => package_relpath(reg, pkg)
+        "name" => pkg.name, "path" => package_relpath(pkg)
     )
     reg
 end

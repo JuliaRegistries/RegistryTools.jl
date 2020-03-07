@@ -2,6 +2,7 @@ module RegistryTools
 
 export RegBranch
 export register
+export check_and_update_registry_files
 
 using AutoHashEquals
 using LibGit2
