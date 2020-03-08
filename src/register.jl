@@ -60,7 +60,6 @@ const mandatory_errors = [:version_exists,
 # These are considered errors by Registrator and are default for the
 # `register` function. The caller can override this selection.
 const registrator_errors = [:version_zero,
-                            :version_less_than_all_existing,
                             :change_package_url,
                             :dependency_not_found,
                             :julia_before_07_in_compat,
