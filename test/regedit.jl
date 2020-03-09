@@ -210,19 +210,31 @@ end
 end
 
 @testset "package_file" begin
-    import RegistryTools: update_package_file
-    mktempdir(@__DIR__) do temp_dir
+    import RegistryTools: check_package!, update_package_file
+    mktempdir(@__DIR__) do package_path
         uuid = "698ec630-83b2-4a6d-81d4-a10176273030"
         pkg = Project(Dict("name" => "Example", "uuid" => uuid))
         repo = "https://example.com/example.git"
-        update_package_file(pkg, repo, temp_dir)
-        package_file = joinpath(temp_dir, "Package.toml")
+        status = ReturnStatus()
+        @test check_package!("", package_path, status) == ""
+        @test haserror(status)
+        status = ReturnStatus()
+        @test check_package!(repo, package_path, status) == repo
+        @test !haserror(status)
+        update_package_file(pkg, repo, package_path)
+        package_file = joinpath(package_path, "Package.toml")
         @test isfile(package_file)
         @test read(package_file, String) == """
                                             name = "Example"
                                             uuid = "$uuid"
                                             repo = "$repo"
                                             """
+        status = ReturnStatus()
+        @test check_package!("", package_path, status) == repo
+        @test !haserror(status)
+        status = ReturnStatus()
+        @test check_package!(repo, package_path, status) == repo
+        @test !haserror(status)
     end
 end
 
@@ -503,6 +515,22 @@ end
              regbranch = (error = true, warning = false,
                           kind = "New version",
                           labels = String["patch_release"]))
+
+            # Register new package with empty package repo string.
+            (project_files = ["Example1"],
+             no_package_repo = "Example1",
+             status = Symbol[:new_package, :package_url_missing],
+             regbranch = (error = true, warning = false,
+                          kind = "New package",
+                          labels = String[]))
+
+            # Register new version with empty package repo string.
+            (project_files = ["Example1", "Example2"],
+             no_package_repo = "Example2",
+             status = Symbol[:new_version, :patch_release],
+             regbranch = (error = false, warning = false,
+                          kind = "New version",
+                          labels = String["patch_release"]))
         ]
 
 
@@ -528,9 +556,11 @@ end
                 # Create status object.
                 status = ReturnStatus()
                 regbr = RegBranch(pkg, "")
-                package_repo = string("http://example.com/$(pkg.name).git")
+                package_repo = "http://example.com/$(pkg.name).git"
                 if get(test_data, :modify_package_repo, "") == project
-                    package_repo = string("http://example.org/$(pkg.name).git")
+                    package_repo = "http://example.org/$(pkg.name).git"
+                elseif get(test_data, :no_package_repo, "") == project
+                    package_repo = ""
                 end
                 check_and_update_registry_files(pkg, package_repo, tree_hash,
                                                 registry_path,
@@ -558,7 +588,7 @@ function create_and_populate_registry(registry_path, registry_name,
     projects_path = joinpath(@__DIR__, "project_files")
     project_file = joinpath(projects_path, "$(package).toml")
     pkg = read_project(project_file)
-    package_repo = string("http://example.com/$(pkg.name).git")
+    package_repo = "http://example.com/$(pkg.name).git"
     tree_hash = repeat("0", 40)
     registry_deps_paths = String[]
     status = ReturnStatus()
@@ -599,7 +629,7 @@ end
         projects_path = joinpath(@__DIR__, "project_files")
         project_file = joinpath(projects_path, "Example18.toml")
         pkg = read_project(project_file)
-        package_repo = string("http://example.com/$(pkg.name).git")
+        package_repo = "http://example.com/$(pkg.name).git"
         tree_hash = repeat("0", 40)
         registry_repo = "file://$(registry1_path)"
         deps_repo = "file://$(registry2_path)"
