@@ -54,7 +54,8 @@ const mandatory_errors = [:version_exists,
                           :change_package_uuid,  # not allowed
                           :package_self_dep,
                           :name_mismatch,
-                          :wrong_stdlib_uuid
+                          :wrong_stdlib_uuid,
+                          :package_url_missing
                           ]
 
 # These are considered errors by Registrator and are default for the
@@ -161,6 +162,8 @@ function set_metadata!(regbr::RegBranch, status::ReturnStatus)
             regbr.metadata["error"] = "Julia version < 0.7 not allowed in `[compat]`"
         elseif check == :invalid_compat
             regbr.metadata["error"] = "Following packages are mentioned in `[compat]` but not found in `[deps]` or `[extras]`:\n" * join(data.invalid_compats, "\n")
+        elseif check == :package_url_missing
+            regbr.metadata["error"] = "No repo URL provided for a new package"
         elseif check == :unexpected_registration_error
             regbr.metadata["error"] = "Unexpected error in registration"
         end
@@ -272,7 +275,6 @@ function versionrange(lo::VersionBound, hi::VersionBound)
 end
 
 function find_package_in_registry(pkg::Pkg.Types.Project,
-                                  package_repo::AbstractString,
                                   registry_file::AbstractString,
                                   registry_path::AbstractString,
                                   registry_data::RegistryData,
@@ -287,13 +289,6 @@ function find_package_in_registry(pkg::Pkg.Types.Project,
             haserror(status) && return nothing
         end
         package_path = joinpath(registry_path, package_data["path"])
-        repo = TOML.parsefile(joinpath(package_path, "Package.toml"))["repo"]
-        if repo != package_repo
-            err = :change_package_url
-            @debug(err)
-            add!(status, err)
-            haserror(status) && return nothing
-        end
         add!(status, :new_version)
     else
         @debug("Package with UUID: $uuid not found in registry, checking if UUID was changed")
@@ -317,6 +312,30 @@ function find_package_in_registry(pkg::Pkg.Types.Project,
     end
 
     return package_path
+end
+
+# If `package_repo` is an empty string, replace it with what is
+# already stored in Package.toml.
+function check_package!(package_repo::AbstractString,
+                        package_path::AbstractString,
+                        status::ReturnStatus)
+    package_file = joinpath(package_path, "Package.toml")
+    # If this is a registration of a new package, the package file has
+    # not been created yet.
+    if isfile(package_file)
+        repo = TOML.parsefile(package_file)["repo"]
+        if isempty(package_repo)
+            package_repo = repo
+        elseif repo != package_repo
+            err = :change_package_url
+            @debug(err)
+            add!(status, err)
+        end
+    elseif isempty(package_repo)
+        add!(status, :package_url_missing)
+    end
+
+    return package_repo
 end
 
 function update_package_file(pkg::Pkg.Types.Project,
@@ -514,13 +533,14 @@ function check_and_update_registry_files(pkg, package_repo, tree_hash,
     @debug("find package in registry")
     registry_file = joinpath(registry_path, "Registry.toml")
     registry_data = parse_registry(registry_file)
-    package_path = find_package_in_registry(pkg, package_repo,
-                                            registry_file, registry_path,
+    package_path = find_package_in_registry(pkg, registry_file, registry_path,
                                             registry_data, status)
     haserror(status) && return
 
     # update package data: package file
     @debug("update package data: package file")
+    package_repo = check_package!(package_repo, package_path, status)
+    haserror(status) && return
     update_package_file(pkg, package_repo, package_path)
 
     # update package data: versions file
@@ -557,7 +577,7 @@ errors or warnings that occurred.
 
 # Arguments
 
-* `package_repo::AbstractString`: the git repository URL for the package to be registered
+* `package_repo::AbstractString`: The git repository URL for the package to be registered. If empty, keep the stored repository URL.
 * `pkg::Pkg.Types.Project`: the parsed (Julia)Project.toml file for the package to be registered
 * `tree_hash::AbstractString`: the tree hash (not commit hash) of the package revision to be registered
 
@@ -582,7 +602,9 @@ function register(
 )
     # get info from package registry
     @debug("get info from package registry")
-    package_repo = GitTools.normalize_url(package_repo)
+    if !isempty(package_repo)
+        package_repo = GitTools.normalize_url(package_repo)
+    end
 
     # return object
     regbr = RegBranch(pkg, branch)
