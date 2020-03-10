@@ -707,3 +707,28 @@ end
 register(regp::RegisterParams) = register(regp.package_repo, regp.pkg, regp.tree_sha;
                                           registry=regp.registry, registry_deps=regp.registry_deps,
                                           push=regp.push, gitconfig=regp.gitconfig)
+
+"""
+    find_registered_version(pkg, registry_path)
+
+If the package and version specified by `pkg` exists in the registry
+at `registry_path`, return its tree hash. Otherwise return the empty
+string.
+"""
+function find_registered_version(pkg::Pkg.Types.Project,
+                                 registry_path::AbstractString)
+    registry_file = joinpath(registry_path, "Registry.toml")
+    registry_data = parse_registry(registry_file)
+    # Cannot use find_package_in_registry since it may add paths in
+    # the registry.
+    if !haskey(registry_data.packages, string(pkg.uuid))
+        return ""
+    end
+    package_data = registry_data.packages[string(pkg.uuid)]
+    package_path = joinpath(registry_path, package_data["path"])
+    _, versions_data = get_versions_file(package_path)
+    if !haskey(versions_data, string(pkg.version))
+        return ""
+    end
+    return versions_data[string(pkg.version)]["git-tree-sha1"]
+end
