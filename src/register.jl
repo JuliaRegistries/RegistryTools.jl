@@ -374,7 +374,24 @@ function update_versions_file(pkg::Pkg.Types.Project,
     versions_data[string(pkg.version)] = version_info
 
     open(versions_file, "w") do io
-        TOML.print(io, versions_data; sorted=true, by=x->VersionNumber(x))
+        # TOML.print with sorted=true sorts recursively
+        # so this by function needs to handle the outer dict
+        # with version number keys, and the inner dict with
+        # git-tree-sha1, yanked, etc as keys.
+        function by(x)
+            if occursin(Base.VERSION_REGEX, x)
+                return VersionNumber(x)
+            else
+                if x == "git-tree-sha1"
+                    return 1
+                elseif x == "yanked"
+                    return 2
+                else
+                    return 3
+                end
+            end
+        end
+        TOML.print(io, versions_data; sorted=true, by=by)
     end
 end
 

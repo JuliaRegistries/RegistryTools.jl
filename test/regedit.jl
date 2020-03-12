@@ -260,7 +260,6 @@ end
 
         find_package_in_registry(pkg, registry_file, registry_path,
                                  registry_data, status)
-        print(read(registry_file, String))
         @test read(registry_file, String) == """
                                              name = "TestRegistry"
                                              uuid = "$(registry_uuid)"
@@ -669,6 +668,33 @@ end
         project_file = joinpath(projects_path, "Example2.toml")
         pkg = read_project(project_file)
         @test find_registered_version(pkg, registry_path) == ""
+    end
+end
+
+@testset "Sorted (recursive) TOML.print for Versions.toml file" begin
+    pkg = Project(version = v"2.0.0")
+    # versions_file = "Versions.toml"
+    version_data = Dict{String,Any}(
+         "1.0.0" => Dict("yanked"=>true,"git-tree-sha1"=>"b04b6c6bfd3a607aa1b85362b4854ef612137f3e"),
+         "3.0.0" => Dict("git-tree-sha1"=>"96429a372b5c4ad63fa9cbff6ba4178a85939705","foo"=>"bar")
+    )
+    tree_hash = "20cd0a2651eaf28c8a76c8d7fea4f1107f20174b"
+    mktemp() do path, io
+        RegistryTools.update_versions_file(pkg, path, version_data, tree_hash::AbstractString)
+        close(io)
+        @test read(path, String) ==
+        """
+        ["1.0.0"]
+        git-tree-sha1 = "b04b6c6bfd3a607aa1b85362b4854ef612137f3e"
+        yanked = true
+
+        ["2.0.0"]
+        git-tree-sha1 = "20cd0a2651eaf28c8a76c8d7fea4f1107f20174b"
+
+        ["3.0.0"]
+        git-tree-sha1 = "96429a372b5c4ad63fa9cbff6ba4178a85939705"
+        foo = "bar"
+        """
     end
 end
 
