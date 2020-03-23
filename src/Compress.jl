@@ -49,21 +49,28 @@ function load_versions(path::String)
 end
 
 function load(path::String,
-    versions::Vector{VersionNumber} = load_versions(path))
+              versions::Vector{VersionNumber} = load_versions(path))
     compressed = TOML.parsefile(path)
     uncompressed = Dict{VersionNumber,Dict{Any,Any}}()
     for (vers, data) in compressed
         vs = VersionSpec(vers)
         for v in versions
             v in vs || continue
-            merge!(get!(uncompressed, v, Dict()), deepcopy(data))
+            uv = get!(uncompressed, v, Dict())
+            for (key, value) in data
+                if haskey(uv, key)
+                    error("Overlapping ranges for $(key) in Compat. Detected for version $(v).")
+                else
+                    uv[key] = value
+                end
+            end
         end
     end
     return uncompressed
 end
 
 function compress(path::String, uncompressed::Dict,
-    versions::Vector{VersionNumber} = load_versions(path))
+                  versions::Vector{VersionNumber} = load_versions(path))
     inverted = Dict()
     for (ver, data) in uncompressed, (key, val) in data
         val isa TOML.TYPE || (val = string(val))
@@ -79,7 +86,7 @@ function compress(path::String, uncompressed::Dict,
 end
 
 function save(path::String, uncompressed::Dict,
-    versions::Vector{VersionNumber} = load_versions(path))
+              versions::Vector{VersionNumber} = load_versions(path))
     compressed = compress(path, uncompressed)
     open(path, write=true) do io
         TOML.print(io, compressed, sorted=true)
