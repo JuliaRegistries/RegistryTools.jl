@@ -354,21 +354,21 @@ end
              status = Symbol[:new_version, :patch_release],
              regbranch = (error = false, warning = false,
                           kind = "New version",
-                          labels = String["patch_release"]))
+                          labels = String["patch release"]))
 
             # Increase minor revision.
             (project_files = ["Example1", "Example2", "Example3"],
              status = Symbol[:new_version, :minor_release],
              regbranch = (error = false, warning = false,
                           kind = "New version",
-                          labels = String["minor_release"]))
+                          labels = String["minor release"]))
 
             # Increase major revision.
             (project_files = ["Example1", "Example4"],
              status = Symbol[:new_version, :major_release, :breaking],
              regbranch = (error = false, warning = false,
                           kind = "New version",
-                          labels = String["major_release", "BREAKING"]))
+                          labels = String["major release", "BREAKING"]))
 
             # Adding a minor revision after next major revision has
             # been registered.
@@ -376,7 +376,7 @@ end
              status = Symbol[:new_version, :minor_release],
              regbranch = (error = false, warning = false,
                           kind = "New version",
-                          labels = String["minor_release"]))
+                          labels = String["minor release"]))
 
             # Adding a revision that comes before all registered versions.
             (project_files = ["Example2", "Example4", "Example3", "Example1"],
@@ -403,7 +403,7 @@ end
              status = Symbol[:new_version, :minor_release, :version_skip],
              regbranch = (error = false, warning = true,
                           kind = "New version",
-                          labels = String["minor_release"]))
+                          labels = String["minor release"]))
 
             # Adding an existing version.
             (project_files = ["Example1", "Example1"],
@@ -513,7 +513,7 @@ end
              status = Symbol[:new_version, :patch_release, :change_package_url],
              regbranch = (error = true, warning = false,
                           kind = "New version",
-                          labels = String["patch_release"]))
+                          labels = String["patch release"]))
 
             # Register new package with empty package repo string.
             (project_files = ["Example1"],
@@ -529,7 +529,7 @@ end
              status = Symbol[:new_version, :patch_release],
              regbranch = (error = false, warning = false,
                           kind = "New version",
-                          labels = String["patch_release"]))
+                          labels = String["patch release"]))
         ]
 
 
