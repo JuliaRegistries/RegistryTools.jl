@@ -131,11 +131,11 @@ function set_metadata!(regbr::RegBranch, status::ReturnStatus)
         elseif check == :version_exists
             regbr.metadata["error"] = "Version $(data.version) already exists"
         elseif check == :major_release
-            add_label!(regbr, "major_release")
+            add_label!(regbr, "major release")
         elseif check == :minor_release
-            add_label!(regbr, "minor_release")
+            add_label!(regbr, "minor release")
         elseif check == :patch_release
-            add_label!(regbr, "patch_release")
+            add_label!(regbr, "patch release")
         elseif check == :breaking
             add_label!(regbr, "BREAKING")
         elseif check == :version_skip
