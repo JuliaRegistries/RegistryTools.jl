@@ -123,7 +123,7 @@ function TOML.print(io::IO, reg::RegistryData)
     if reg.description !== nothing
         # print long-form string if there are multiple lines
         if '\n' in reg.description
-            print(io, """\n
+            print(io, "\n", """
                 description = \"\"\"
                 $(reg.description)\"\"\"
                 """
