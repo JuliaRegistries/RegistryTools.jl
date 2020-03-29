@@ -525,22 +525,17 @@ function update_compat_file(pkg::Pkg.Types.Project,
 end
 
 function get_registrator_tree_sha()
-    regtreesha = nothing
-    reg_pkgs = Pkg.Display.status(Pkg.Types.Context(),
-                   [Pkg.PackageSpec("Registrator", Base.UUID("4418983a-e44d-11e8-3aec-9789530b3b3e"))])
-    if !isempty(reg_pkgs)
-        regtreesha = reg_pkgs[1].new.hash
+    # If Registrator is in the manifest, return its tree-sha.
+    # Otherwise return the tree-sha for RegistryTools.
+    manifest = Pkg.Types.Context().env.manifest
+    registrator_uuid = Base.UUID("4418983a-e44d-11e8-3aec-9789530b3b3e")
+    registry_tools_uuid = Base.UUID("d1eb7eb1-105f-429d-abf5-b0f65cb9e2c4")
+    reg_pkg = get(manifest, registrator_uuid,
+                  get(manifest, registry_tools_uuid, nothing))
+    if reg_pkg !== nothing
+        return reg_pkg.tree_hash
     end
-    if regtreesha === nothing
-        regpath = abspath(joinpath(@__DIR__, "..", ".."))
-        if isdir(joinpath(regpath, ".git"))
-            regtreesha = LibGit2.head(regpath)
-        else
-            regtreesha = "unknown"
-        end
-    end
-
-    return regtreesha
+    return "unknown"
 end
 
 function check_and_update_registry_files(pkg, package_repo, tree_hash,
