@@ -568,6 +568,8 @@ end
             end
             # Test the return status of the last package registration.
             @test sort([check.id for check in status.triggered_checks]) == sort(test_data.status)
+            # Add Registrator's errors before filling in RegBranch.
+            union!(status.errors, RegistryTools.registrator_errors)
             set_metadata!(regbr, status)
             @test haskey(regbr.metadata, "error") == test_data.regbranch.error
             @test haskey(regbr.metadata, "warning") == test_data.regbranch.warning

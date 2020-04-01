@@ -118,18 +118,19 @@ function set_metadata!(regbr::RegBranch, status::ReturnStatus)
     for triggered_check in reverse(status.triggered_checks)
         check = triggered_check.id
         data = triggered_check
+        complaint = check in status.errors ? "error" : "warning"
         if check == :version_zero
-            regbr.metadata["error"] = "Package version must be greater than 0.0.0"
+            regbr.metadata[complaint] = "Package version must be greater than 0.0.0"
         elseif check == :new_package_label
             add_label!(regbr, "new package")
         elseif check == :not_standard_first_version
-            regbr.metadata["warning"] =
+            regbr.metadata[complaint] =
                 """This looks like a new registration that registers version $(data.version).
                 Ideally, you should register an initial release with 0.0.1, 0.1.0 or 1.0.0 version numbers"""
         elseif check == :version_less_than_all_existing
-            regbr.metadata["error"] = "Version $(data.version) less than least existing version $(data.least)"
+            regbr.metadata[complaint] = "Version $(data.version) less than least existing version $(data.least)"
         elseif check == :version_exists
-            regbr.metadata["error"] = "Version $(data.version) already exists"
+            regbr.metadata[complaint] = "Version $(data.version) already exists"
         elseif check == :major_release
             add_label!(regbr, "major release")
         elseif check == :minor_release
@@ -139,33 +140,33 @@ function set_metadata!(regbr::RegBranch, status::ReturnStatus)
         elseif check == :breaking
             add_label!(regbr, "BREAKING")
         elseif check == :version_skip
-            regbr.metadata["warning"] = "Version $(data.version) skips over $(data.next)"
+            regbr.metadata[complaint] = "Version $(data.version) skips over $(data.next)"
         elseif check == :change_package_name
-            regbr.metadata["error"] = "Changing package names not supported yet"
+            regbr.metadata[complaint] = "Changing package names not supported yet"
         elseif check == :change_package_url
-            regbr.metadata["error"] = "Changing package repo URL not allowed, please submit a pull request with the URL change to the target registry and retry."
+            regbr.metadata[complaint] = "Changing package repo URL not allowed, please submit a pull request with the URL change to the target registry and retry."
         elseif check == :new_version
             regbr.metadata["kind"] = "New version"
         elseif check == :new_package
             regbr.metadata["kind"] = "New package"
         elseif check == :change_package_uuid
-            regbr.metadata["error"] = "Changing UUIDs is not allowed"
+            regbr.metadata[complaint] = "Changing UUIDs is not allowed"
         elseif check == :package_self_dep
-            regbr.metadata["error"] = "Package $(data.name) mentions itself in `[deps]`"
+            regbr.metadata[complaint] = "Package $(data.name) mentions itself in `[deps]`"
         elseif check == :name_mismatch
-            regbr.metadata["error"] = "Error in (Julia)Project.toml: UUID $(data.uuid) refers to package '$(data.reg_name)' in registry but Project.toml has '$(data.project_name)'"
+            regbr.metadata[complaint] = "Error in (Julia)Project.toml: UUID $(data.uuid) refers to package '$(data.reg_name)' in registry but Project.toml has '$(data.project_name)'"
         elseif check == :wrong_stdlib_uuid
-            regbr.metadata["error"] = "Error in (Julia)Project.toml: UUID $(data.project_uuid) for package $(data.name) should be $(data.stdlib_uuid)"
+            regbr.metadata[complaint] = "Error in (Julia)Project.toml: UUID $(data.project_uuid) for package $(data.name) should be $(data.stdlib_uuid)"
         elseif check == :dependency_not_found
-            regbr.metadata["error"] = "Error in (Julia)Project.toml: Package '$(data.name)' with UUID: $(data.uuid) not found in registry or stdlib"
+            regbr.metadata[complaint] = "Error in (Julia)Project.toml: Package '$(data.name)' with UUID: $(data.uuid) not found in registry or stdlib"
         elseif check == :julia_before_07_in_compat
-            regbr.metadata["error"] = "Julia version < 0.7 not allowed in `[compat]`"
+            regbr.metadata[complaint] = "Julia version < 0.7 not allowed in `[compat]`"
         elseif check == :invalid_compat
-            regbr.metadata["error"] = "Following packages are mentioned in `[compat]` but not found in `[deps]` or `[extras]`:\n" * join(data.invalid_compats, "\n")
+            regbr.metadata[complaint] = "Following packages are mentioned in `[compat]` but not found in `[deps]` or `[extras]`:\n" * join(data.invalid_compats, "\n")
         elseif check == :package_url_missing
-            regbr.metadata["error"] = "No repo URL provided for a new package"
+            regbr.metadata[complaint] = "No repo URL provided for a new package"
         elseif check == :unexpected_registration_error
-            regbr.metadata["error"] = "Unexpected error in registration"
+            regbr.metadata[complaint] = "Unexpected error in registration"
         end
     end
     return regbr
