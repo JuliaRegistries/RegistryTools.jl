@@ -384,6 +384,14 @@ end
              regbranch = (error = true, warning = false,
                           kind = "New version", labels = String[]))
 
+            # Adding a revision that comes before all registered versions.
+            # This time disable this as an error in RegBranch.
+            (project_files = ["Example2", "Example4", "Example3", "Example1"],
+             disable_regbranch_errors = [:version_less_than_all_existing],
+             status = Symbol[:new_version, :version_less_than_all_existing],
+             regbranch = (error = false, warning = true,
+                          kind = "New version", labels = String[]))
+
             # Non-standard first version.
             (project_files = ["Example2"],
              status = Symbol[:new_package, :new_package_label,
@@ -569,7 +577,9 @@ end
             # Test the return status of the last package registration.
             @test sort([check.id for check in status.triggered_checks]) == sort(test_data.status)
             # Add Registrator's errors before filling in RegBranch.
-            union!(status.errors, RegistryTools.registrator_errors)
+            union!(status.errors,
+                   setdiff(RegistryTools.registrator_errors,
+                           get(test_data, :disable_regbranch_errors, [])))
             set_metadata!(regbr, status)
             @test haskey(regbr.metadata, "error") == test_data.regbranch.error
             @test haskey(regbr.metadata, "warning") == test_data.regbranch.warning
