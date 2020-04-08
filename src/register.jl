@@ -341,14 +341,18 @@ end
 
 function update_package_file(pkg::Pkg.Types.Project,
                              package_repo::AbstractString,
+                             subdir::AbstractString,
                              package_path::AbstractString)
     package_info = Dict("name" => pkg.name,
                         "uuid" => string(pkg.uuid),
                         "repo" => package_repo)
+    if !isempty(subdir)
+        package_info["subdir"] = subdir
+    end
     package_file = joinpath(package_path, "Package.toml")
     open(package_file, "w") do io
         TOML.print(io, package_info; sorted=true,
-            by = x -> x == "name" ? 1 : x == "uuid" ? 2 : 3)
+            by = x -> x == "name" ? 1 : x == "uuid" ? 2 : x == "repo" ? 3 : 4)
     end
     nothing
 end
@@ -541,7 +545,7 @@ end
 
 function check_and_update_registry_files(pkg, package_repo, tree_hash,
                                          registry_path, registry_deps_paths,
-                                         status)
+                                         status; subdir = "")
     # find package in registry
     @debug("find package in registry")
     registry_file = joinpath(registry_path, "Registry.toml")
@@ -554,7 +558,7 @@ function check_and_update_registry_files(pkg, package_repo, tree_hash,
     @debug("update package data: package file")
     package_repo = check_package!(package_repo, package_path, status)
     haserror(status) && return
-    update_package_file(pkg, package_repo, package_path)
+    update_package_file(pkg, package_repo, subdir, package_path)
 
     # update package data: versions file
     @debug("update package data: versions file")
@@ -599,6 +603,7 @@ errors or warnings that occurred.
 * `registry::AbstractString="$DEFAULT_REGISTRY_URL"`: the git repository URL for the registry
 * `registry_deps::Vector{String}=[]`: the git repository URLs for any registries containing
     packages depended on by `pkg`
+* `subdir::AbstractString=""`: path to package within `package_repo`
 * `push::Bool=false`: whether to push a registration branch to `registry` for consideration
 * `gitconfig::Dict=Dict()`: dictionary of configuration options for the `git` command
 """
@@ -606,6 +611,7 @@ function register(
     package_repo::AbstractString, pkg::Pkg.Types.Project, tree_hash::AbstractString;
     registry::AbstractString = DEFAULT_REGISTRY_URL,
     registry_deps::Vector{<:AbstractString} = AbstractString[],
+    subdir::AbstractString = "",
     checks_triggering_error = registrator_errors,
     push::Bool = false,
     force_reset::Bool = true,
@@ -650,7 +656,7 @@ function register(
 
         check_and_update_registry_files(pkg, package_repo, tree_hash,
                                         registry_path, registry_deps_paths,
-                                        status)
+                                        status, subdir = subdir)
         haserror(status) && return set_metadata!(regbr, status)
 
         regtreesha = get_registrator_tree_sha()

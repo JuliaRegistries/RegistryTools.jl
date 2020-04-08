@@ -221,7 +221,7 @@ end
         status = ReturnStatus()
         @test check_package!(repo, package_path, status) == repo
         @test !haserror(status)
-        update_package_file(pkg, repo, package_path)
+        update_package_file(pkg, repo, "", package_path)
         package_file = joinpath(package_path, "Package.toml")
         @test isfile(package_file)
         @test read(package_file, String) == """
@@ -652,6 +652,13 @@ end
         branches = readlines(`$git branch`)
         @test length(branches) == 2
     end
+
+    # Clean up the registry cache created by `register`.
+    rm(joinpath(@__DIR__, "registries", "7e1d4fce-5fe6-405e-8bac-078d4138e9a2"),
+       recursive = true)
+    rm(joinpath(@__DIR__, "registries", "a5a8be26-c942-4674-beee-533a0e81ac1d"),
+       recursive = true)
+    rm(joinpath(@__DIR__, "registries"))
 end
 
 @testset "find_registered_version" begin
@@ -707,6 +714,52 @@ end
         git-tree-sha1 = "96429a372b5c4ad63fa9cbff6ba4178a85939705"
         foo = "bar"
         """
+    end
+end
+
+@testset "subdirectory" begin
+    import RegistryTools: ReturnStatus, check_and_update_registry_files
+    import Pkg.Types: read_project
+
+    mktempdir(@__DIR__) do temp_dir
+        registry_path = joinpath(temp_dir, "registry")
+        projects_path = joinpath(@__DIR__, "project_files")
+        registry_deps_paths = String[]
+        tree_hash = repeat("0", 40)
+        # Start with an empty registry.
+        create_empty_registry(registry_path, "TestRegistry",
+                              "d4e2f5cd-0f48-4704-9988-f1754e755b45")
+        # Register a package without subdir (default).
+        project_file = joinpath(projects_path, "Example1.toml")
+        pkg = read_project(project_file)
+        status = ReturnStatus()
+        package_repo = "http://example.com/Example1.git"
+        check_and_update_registry_files(pkg, package_repo, tree_hash,
+                                        registry_path,
+                                        registry_deps_paths, status)
+        @test read(joinpath(registry_path, "E", "Example", "Package.toml"), String) ==
+            """
+            name = "Example"
+            uuid = "d7508571-2240-4c50-b21c-240e414cc6d2"
+            repo = "$(package_repo)"
+            """
+
+        # Register a package with subdir.
+        project_file = joinpath(projects_path, "Dep1.toml")
+        pkg = read_project(project_file)
+        status = ReturnStatus()
+        package_repo = "http://example.com/BigRepo.git"
+        check_and_update_registry_files(pkg, package_repo, tree_hash,
+                                        registry_path,
+                                        registry_deps_paths, status,
+                                        subdir = "packages/Dep")
+        @test read(joinpath(registry_path, "D", "Dep", "Package.toml"), String) ==
+            """
+            name = "Dep"
+            uuid = "49c7135d-e2b1-4bed-912f-5371fe4924fa"
+            repo = "$(package_repo)"
+            subdir = "packages/Dep"
+            """
     end
 end
 
