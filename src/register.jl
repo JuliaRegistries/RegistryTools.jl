@@ -707,6 +707,7 @@ struct RegisterParams
     tree_sha::AbstractString
     registry::AbstractString
     registry_deps::Vector{<:AbstractString}
+    subdir::AbstractString
     push::Bool
     gitconfig::Dict
 
@@ -715,17 +716,18 @@ struct RegisterParams
                             tree_sha::AbstractString;
                             registry::AbstractString=DEFAULT_REGISTRY_URL,
                             registry_deps::Vector{<:AbstractString}=[],
+                            subdir::AbstractString="",
                             push::Bool=false,
                             gitconfig::Dict=Dict())
         new(package_repo, pkg, tree_sha,
-            registry, registry_deps,
+            registry, registry_deps, subdir,
             push, gitconfig)
     end
 end
 
 register(regp::RegisterParams) = register(regp.package_repo, regp.pkg, regp.tree_sha;
                                           registry=regp.registry, registry_deps=regp.registry_deps,
-                                          push=regp.push, gitconfig=regp.gitconfig)
+                                          subdir=regp.subdir, push=regp.push, gitconfig=regp.gitconfig)
 
 """
     find_registered_version(pkg, registry_path)
