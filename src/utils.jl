@@ -1,7 +1,7 @@
 showsafe(x) = (x === nothing) ? "nothing" : x
 
 function gitcmd(path::AbstractString, gitconfig::Dict)
-    cmd = ["git", "-C", path]
+    cmd = ["git", "--work-tree=$path", "--git-dir=$path/.git"]
     for (n,v) in gitconfig
         push!(cmd, "-c")
         push!(cmd, "$n=$v")
