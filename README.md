@@ -6,7 +6,7 @@
 
 Functionality for modifying Julia registry files. 
 
-## Setting up and using an additionl registry
+## Setting up and using an additional registry
 
 You can use these tools to setup and maintain your own (private) registry of julia packages. 
 This way register/tag packages you do not want to register in the "General" registry and let the
