@@ -7,6 +7,7 @@ using RegistryTools: DEFAULT_REGISTRY_URL,
 using LibGit2
 using Pkg.TOML
 using Pkg.Types: Project
+using UUIDs
 
 using Test
 
@@ -761,6 +762,63 @@ end
             subdir = "packages/Dep"
             """
     end
+end
+
+@testset "Relative Path" begin
+    registry_data = RegistryTools.RegistryData(
+        "BlankRegistry", "d4e2f5cd-0f48-4704-9988-f1754e755b45")
+
+    packages = [("Example",
+                 "7876af07-990d-54b4-ab0e-23690620f79a",
+                 "E/Example"),
+                ("example",
+                 "0000af07-990d-54b4-ab0e-23690620f79a",
+                 "E/example.0000"),
+                ("eXampLe",
+                 "7800af07-990d-54b4-ab0e-23690620f79a",
+                 "E/eXampLe.7800"),
+                ("exAmPlE",
+                 "7876a007-990d-54b4-ab0e-23690620f79a",
+                 "E/exAmPlE.7876"),
+                ("EXAMPLE",
+                 "7876af07-990d-54b4-ab0e-00690620f79a",
+                 "E/EXAMPLE.7876a"),
+                ("example",
+                 "7876af07-990d-54b4-ab0e-23000620f79a",
+                 "E/example.7876af")]
+
+    for (name, uuid, expected_path) in packages
+        project = Project(Dict("name" => name, "uuid" => uuid))
+        push!(registry_data, project)
+        @test registry_data.packages[uuid]["name"] == name
+        @test registry_data.packages[uuid]["path"] == expected_path
+    end
+
+    # Stress the path names.
+    for i = 8:32
+        name, uuid, _ = packages[1]
+        modified_uuid = string(UUID(xor(UUID(uuid).value,
+                                        UInt128(1) << (4 * (32 - i)))))
+        project = Project(Dict("name" => name, "uuid" => modified_uuid))
+        push!(registry_data, project)
+        relpath = registry_data.packages[modified_uuid]["path"]
+        uuid_part = split(relpath, ".")[end]
+        @test startswith(uuid, uuid_part)
+        @test relpath[end] != '-'
+        @test length(replace(uuid_part, "-" => "")) == i - 1
+    end
+
+    # Keep stressing. This requires all the characters of the uuid in
+    # the path.
+    name, uuid, = "Example", "7876af07-990d-54b4-ab0e-23690620f790"
+    project = Project(Dict("name" => name, "uuid" => uuid))
+    push!(registry_data, project)
+    @test registry_data.packages[uuid]["path"] == "E/Example.$(uuid)"
+
+    # This tries to add the same uuid again and is thus misusing the
+    # function but adds coverage by reaching an assertion that should
+    # never fail with correct use.
+    @test_throws AssertionError push!(registry_data, project)
 end
 
 end

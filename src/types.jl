@@ -162,12 +162,13 @@ function package_relpath(registry_data::RegistryData,
         # the path unique.
         uuid = string(pkg.uuid)
         for n = 4:length(uuid)
+            uuid[n] == '-' && continue
             extended_relpath = string(relpath, ".", uuid[1:n])
             if !(lowercase(extended_relpath) in existing_relpaths)
                 return extended_relpath
             end
         end
-        @assert false, "UUID $(uuid) is not unique in registry"
+        @assert false "UUID $(uuid) already exists in registry"
     end
 
     return relpath
