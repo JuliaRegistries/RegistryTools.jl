@@ -624,6 +624,7 @@ function register(
     if !isempty(package_repo)
         package_repo = GitTools.normalize_url(package_repo)
     end
+    package_repo = replace(package_repo, "github" => "GitHub")
 
     # return object
     regbr = RegBranch(pkg, branch)
