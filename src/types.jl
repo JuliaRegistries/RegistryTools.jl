@@ -32,22 +32,23 @@ function get_registry(
     gitconfig::Dict=Dict(),
     cache::RegistryCache=REGISTRY_CACHE,
     force_reset::Bool=true,
+    default_registry_branch::AbstractString="master"
 )
     if haskey(cache.registries, registry_url)
         registry_path = path(cache, registry_url)
 
         if !ispath(registry_path)
             mkpath(path(cache))
-            run(`git clone $registry_url $registry_path --branch=master`)
+            run(`git clone $registry_url $registry_path --branch=$default_registry_branch`)
         else
             # this is really annoying/impossible to do with LibGit2
             git = gitcmd(registry_path, gitconfig)
             run(`$git config remote.origin.url $registry_url`)
-            run(`$git checkout -q -f master`)
+            run(`$git checkout -q -f $default_registry_branch`)
             # uses config because git versions <2.17.0 did not have the -P option
-            run(`$git -c fetch.pruneTags fetch -q origin master`)
+            run(`$git -c fetch.pruneTags fetch -q origin $default_registry_branch`)
             if force_reset
-                run(`$git reset -q --hard origin/master`)
+                run(`$git reset -q --hard origin/$default_registry_branch`)
             end
         end
     else
