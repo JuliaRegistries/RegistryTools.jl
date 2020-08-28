@@ -343,7 +343,9 @@ function update_package_file(pkg::Pkg.Types.Project,
                              package_repo::AbstractString,
                              subdir::AbstractString,
                              package_path::AbstractString)
-    package_info = Dict("name" => pkg.name,
+    # package_info = Dict{String,String}(
+    package_info = Dict(
+                        "name" => pkg.name,
                         "uuid" => string(pkg.uuid),
                         "repo" => package_repo)
     if !isempty(subdir)
