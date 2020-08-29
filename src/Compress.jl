@@ -1,6 +1,8 @@
 module Compress
 
+# TODO: import TOML for Julia 1.6
 import Pkg.TOML
+const STDLIB_TOML = VERSION >= v"1.6.0-DEV.764"
 import Pkg.Types: VersionSpec, VersionRange, VersionBound
 
 """
@@ -73,7 +75,9 @@ function compress(path::String, uncompressed::Dict,
                   versions::Vector{VersionNumber} = load_versions(path))
     inverted = Dict()
     for (ver, data) in uncompressed, (key, val) in data
-        val isa TOML.TYPE || (val = string(val))
+        if !STDLIB_TOML
+            val isa TOML.TYPE || (val = string(val))
+        end
         push!(get!(inverted, key => val, VersionNumber[]), ver)
     end
     compressed = Dict()
@@ -89,7 +93,11 @@ function save(path::String, uncompressed::Dict,
               versions::Vector{VersionNumber} = load_versions(path))
     compressed = compress(path, uncompressed)
     open(path, write=true) do io
-        TOML.print(io, compressed, sorted=true)
+        if STDLIB_TOML
+            TOML.print(string, io, compressed, sorted=true)
+        else
+            TOML.print(io, compressed, sorted=true)
+        end
     end
 end
 
