@@ -98,8 +98,7 @@ function Base.copy(reg::RegistryData)
     )
 end
 
-function parse_registry(io::IO)
-    data = TOML.parse(io)
+function parse_registry(data::Dict)
 
     name = pop!(data, "name")
     uuid = pop!(data, "uuid")
@@ -110,7 +109,10 @@ function parse_registry(io::IO)
     RegistryData(name, UUID(uuid), repo, description, packages, data)
 end
 
-parse_registry(str::AbstractString) = open(parse_registry, str)
+# TODO: The IO method is only used in tests, non-breaking to remove?
+parse_registry(io::IO) = parse_registry(TOML.parse(read(io, String)))
+parse_registry(file::AbstractString) = parse_registry(TOML.parsefile(file))
+
 
 function TOML.print(io::IO, reg::RegistryData)
     println(io, "name = ", repr(reg.name))
