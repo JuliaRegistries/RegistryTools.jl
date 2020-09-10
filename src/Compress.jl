@@ -73,14 +73,11 @@ end
 
 function compress(path::String, uncompressed::Dict,
                   versions::Vector{VersionNumber} = load_versions(path))
-    inverted = Dict()
+    inverted = Dict{Pair{String,String},Vector{VersionNumber}}()
     for (ver, data) in uncompressed, (key, val) in data
-        if !STDLIB_TOML
-            val isa TOML.TYPE || (val = string(val))
-        end
-        push!(get!(inverted, key => val, VersionNumber[]), ver)
+        push!(get!(inverted, string(key) => string(val), VersionNumber[]), ver)
     end
-    compressed = Dict()
+    compressed = Dict{String,Dict{String,Any}}()
     for ((k, v), vers) in inverted
         for r in compress_versions(versions, sort!(vers)).ranges
             get!(compressed, string(r), Dict{String,Any}())[k] = v
