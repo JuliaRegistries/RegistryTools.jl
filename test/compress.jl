@@ -71,3 +71,23 @@ end
     compressed = compress("/dev/null", uncompressed, versions)
     @test compressed == Dict{String,Any}("0" => pkglibdl_str)
 end
+
+import RegistryTools.Compress
+import Pkg.TOML
+
+@testset "Compress roundtripping of a registry" begin
+    git = Sys.which("git")
+    git === nothing && return
+    mktempdir() do dir
+        run(`$git clone https://github.com/JuliaRegistries/General $dir`)
+        reg = TOML.parsefile(abspath(dir, "Registry.toml"))
+        for (uuid, data) in reg["packages"]
+            for f in abspath.("General", data["path"], ("Deps.toml", "Compat.toml"))
+                if isfile(f)
+                    Compress.save(f, Compress.load(f))
+                end
+            end
+        end
+        @test success(`$git -C $dir diff-index --quiet HEAD --`)
+    end
+end
