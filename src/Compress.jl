@@ -73,9 +73,10 @@ end
 
 function compress(path::String, uncompressed::Dict,
                   versions::Vector{VersionNumber} = load_versions(path))
-    inverted = Dict{Pair{String,String},Vector{VersionNumber}}()
+    inverted = Dict{Pair{String,Any},Vector{VersionNumber}}()
     for (ver, data) in uncompressed, (key, val) in data
-        push!(get!(inverted, string(key) => string(val), VersionNumber[]), ver)
+        val isa Base.UUID && (val = string(val))
+        push!(get!(inverted, key => val, VersionNumber[]), ver)
     end
     compressed = Dict{String,Dict{String,Any}}()
     for ((k, v), vers) in inverted
