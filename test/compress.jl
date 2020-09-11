@@ -1,5 +1,5 @@
 using Pkg
-using RegistryTools.Compress: compress_versions, load
+using RegistryTools.Compress: compress_versions, load, compress
 
 @testset "compress_versions()" begin
     # Test exact version matching
@@ -26,7 +26,7 @@ using RegistryTools.Compress: compress_versions, load
     vs = [v"1.1.0-alpha", v"1.1.0+0", v"1.1.0+1"]
     @test compress_versions(vs, [vs[2]]) == Pkg.Types.VersionSpec("1")
 end
- 
+
 @testset "Compress.load" begin
     mktempdir(@__DIR__) do temp_dir
         versions = [v"1.0.0", v"1.1.0", v"1.2.0", v"1.3.0"]
@@ -56,4 +56,18 @@ end
         write(compat_file, bad_compat)
         @test_throws ErrorException load(compat_file, versions)
     end
+end
+
+@testset "issue#46: compress with mixed input data" begin
+    pkglibdl_str = Dict("Pkg" => "44cfe95a-1eb2-52ea-b672-e2afdf69b78f",
+                        "Libdl" => "8f399da3-3557-5675-b5ff-fb832c97cbdb")
+    pkglibdl_uuid = Dict{String, Base.UUID}(k => Base.UUID(v) for (k, v) in pkglibdl_str)
+    uncompressed = Dict{VersionNumber, Dict{Any, Any}}(
+        v"0.21.1+0" => pkglibdl_str,
+        v"0.22.0+0" => pkglibdl_str,
+        v"0.22.1+0" => pkglibdl_uuid
+        )
+    versions = VersionNumber[ v"0.21.1+0", v"0.22.0+0"]
+    compressed = compress("/dev/null", uncompressed, versions)
+    @test compressed == Dict{String,Any}("0" => pkglibdl_str)
 end
