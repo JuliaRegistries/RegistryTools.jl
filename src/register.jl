@@ -649,7 +649,7 @@ function register(
         # branch registry repo
         @debug("branch registry repo")
         git = gitcmd(registry_path, gitconfig)
-        default_branch = split(readchomp(`git symbolic-ref refs/remotes/origin/HEAD`), '/')[end]
+        default_branch = splitpath(String(readchomp(`git symbolic-ref refs/remotes/origin/HEAD`)))[end]
         run(pipeline(`$git checkout -f $default_branch`; stdout=devnull))
         if branch != default_branch
             run(pipeline(`$git branch -f $branch`; stdout=devnull))

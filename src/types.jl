@@ -35,7 +35,7 @@ function get_registry(
 )
     if haskey(cache.registries, registry_url)
         registry_path = path(cache, registry_url)
-        default_branch = split(readchomp(`git symbolic-ref refs/remotes/origin/HEAD`), '/')[end]
+        default_branch = splitpath(String(readchomp(`git symbolic-ref refs/remotes/origin/HEAD`)))[end]
 
         if !ispath(registry_path)
             mkpath(path(cache))
