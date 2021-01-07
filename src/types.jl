@@ -39,7 +39,7 @@ function get_registry(
 
         if !ispath(registry_path)
             mkpath(path(cache))
-            run(`git clone $registry_url $registry_path --branch=$default_branch`)
+            run(`git clone $registry_url $registry_path`)
         else
             # this is really annoying/impossible to do with LibGit2
             git = gitcmd(registry_path, gitconfig)
