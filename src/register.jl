@@ -637,6 +637,7 @@ function register(
     registry = GitTools.normalize_url(registry)
     registry_repo = get_registry(registry; gitconfig=gitconfig, force_reset=force_reset, cache=cache)
     registry_path = LibGit2.path(registry_repo)
+    registry_default_branch = LibGit2.branch(registry_repo)
 
     isempty(registry_deps) || @debug("get up-to-date clones of registry dependencies")
     registry_deps_paths = map(registry_deps) do registry
@@ -649,9 +650,8 @@ function register(
         # branch registry repo
         @debug("branch registry repo")
         git = gitcmd(registry_path, gitconfig)
-        default_branch = splitpath(String(readchomp(`git symbolic-ref refs/remotes/origin/HEAD`)))[end]
-        run(pipeline(`$git checkout -f $default_branch`; stdout=devnull))
-        if branch != default_branch
+        run(pipeline(`$git checkout -f $registry_default_branch`; stdout=devnull))
+        if branch != registry_default_branch
             run(pipeline(`$git branch -f $branch`; stdout=devnull))
             run(pipeline(`$git checkout -f $branch`; stdout=devnull))
         end
