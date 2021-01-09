@@ -538,7 +538,7 @@ function get_registrator_tree_sha()
     registry_tools_uuid = Base.UUID("d1eb7eb1-105f-429d-abf5-b0f65cb9e2c4")
     reg_pkg = get(manifest, registrator_uuid,
                   get(manifest, registry_tools_uuid, nothing))
-    if reg_pkg !== nothing
+    if reg_pkg !== nothing && VERSION >= v"1.2.0-rc1" && reg_pkg.tree_hash !== nothing
         return reg_pkg.tree_hash
     end
     return "unknown"
