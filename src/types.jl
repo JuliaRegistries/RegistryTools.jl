@@ -32,11 +32,10 @@ function get_registry(
     gitconfig::Dict=Dict(),
     cache::RegistryCache=REGISTRY_CACHE,
     force_reset::Bool=true,
-    default_registry_branch::AbstractString="master"
 )
     if haskey(cache.registries, registry_url)
         registry_path = path(cache, registry_url)
-
+default_registry_branch = split(readchomp(`git symbolic-ref refs/remotes/origin/HEAD`), '/')[end]
         if !ispath(registry_path)
             mkpath(path(cache))
             run(`git clone $registry_url $registry_path --branch=$default_registry_branch`)
