@@ -152,13 +152,33 @@ end
 
 # Not using `joinpath` here since we don't want backslashes in
 # Registry.toml when running on Windows.
-function package_relpath(pkg::Pkg.Types.Project)
-    string(uppercase(pkg.name[1]), "/", pkg.name)
+function package_relpath(registry_data::RegistryData,
+                         pkg::Pkg.Types.Project)
+    relpath = string(uppercase(pkg.name[1]), "/", pkg.name)
+    # Check if this path is free from case insensitive collisions with
+    # previously registered packages.
+    existing_relpaths = Set(lowercase(package["path"])
+                            for package in values(registry_data.packages))
+    if lowercase(relpath) in existing_relpaths
+        # Otherwise suffix with a sufficient part of the uuid to make
+        # the path unique.
+        uuid = string(pkg.uuid)
+        for n = 4:length(uuid)
+            uuid[n] == '-' && continue
+            extended_relpath = string(relpath, ".", uuid[1:n])
+            if !(lowercase(extended_relpath) in existing_relpaths)
+                return extended_relpath
+            end
+        end
+        @assert false "UUID $(uuid) already exists in registry"
+    end
+
+    return relpath
 end
 
 function Base.push!(reg::RegistryData, pkg::Pkg.Types.Project)
     reg.packages[string(pkg.uuid)] = Dict(
-        "name" => pkg.name, "path" => package_relpath(pkg)
+        "name" => pkg.name, "path" => package_relpath(reg, pkg)
     )
     reg
 end

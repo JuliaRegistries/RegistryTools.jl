@@ -303,7 +303,8 @@ function find_package_in_registry(pkg::Pkg.Types.Project,
         end
 
         @debug("Creating directory for new package $(pkg.name)")
-        package_path = joinpath(registry_path, package_relpath(pkg))
+        package_path = joinpath(registry_path,
+                                package_relpath(registry_data, pkg))
         mkpath(package_path)
 
         @debug("Adding package UUID to registry")
@@ -675,10 +676,7 @@ function register(
 
         Registrator tree SHA: $(regtreesha)
         """
-        registry_file = joinpath(registry_path, "Registry.toml")
-        package_path = joinpath(registry_path, package_relpath(pkg))
-        run(pipeline(`$git add -- $package_path`; stdout=devnull))
-        run(pipeline(`$git add -- $registry_file`; stdout=devnull))
+        run(pipeline(`$git add --all`; stdout=devnull))
         run(pipeline(`$git commit -m $message`; stdout=devnull))
 
         # push -f branch to remote
