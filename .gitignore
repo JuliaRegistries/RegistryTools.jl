@@ -9,3 +9,8 @@ run/stop*
 docs/build/
 docs/Manifest.toml
 .vscode
+
+# Temporary files and directories created by Julia:
+test/jl_*
+test/jl_*/
+test/registries/
