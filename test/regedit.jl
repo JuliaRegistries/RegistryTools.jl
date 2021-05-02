@@ -5,6 +5,7 @@ using RegistryTools: DEFAULT_REGISTRY_URL,
     get_registry,
     gitcmd
 using LibGit2
+import Pkg
 using Pkg.TOML
 using Pkg.Types: Project
 
@@ -323,7 +324,12 @@ end
     import RegistryTools: update_compat_file
     mktempdir(@__DIR__) do temp_dir
         compat = Dict("julia" => "1.3")
-        pkg = Project(version = v"1.0.0", compat = compat)
+        if Base.VERSION >= v"1.7-"
+            compat2 = Dict((k, Pkg.Types.Compat(Pkg.Types.semver_spec(v), v)) for (k, v) in compat)
+            pkg = Project(version = v"1.0.0", compat = compat2)
+        else
+            pkg = Project(version = v"1.0.0", compat = compat)
+        end
         update_versions_file(pkg, joinpath(temp_dir, "Versions.toml"),
                              Dict{String, Any}(), repeat("0", 40))
         update_compat_file(pkg, temp_dir, VersionNumber[])

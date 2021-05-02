@@ -441,7 +441,11 @@ function check_compat!(pkg::Pkg.Types.Project,
                        regpaths::Vector{String},
                        status::ReturnStatus)
     if haskey(pkg.compat, "julia")
-        ver = Pkg.Types.semver_spec(pkg.compat["julia"])
+        if Base.VERSION >= v"1.7-"
+            ver = pkg.compat["julia"].val
+        else 
+            ver = Pkg.Types.semver_spec(pkg.compat["julia"])
+        end
         if any(map(x -> !isempty(intersect(Pkg.Types.VersionRange("0-0.6"), x)), ver.ranges))
             err = :julia_before_07_in_compat
             @debug(err)
@@ -516,7 +520,11 @@ function update_compat_file(pkg::Pkg.Types.Project,
             continue
         end
 
-        spec = Pkg.Types.semver_spec(version)
+        if Base.VERSION >= v"1.7-"
+            spec = version.val
+        else
+            spec = Pkg.Types.semver_spec(version)
+        end
         # The call to `map(versionrange, )` can be removed
         # once Pkg is updated to a version including
         # https://github.com/JuliaLang/Pkg.jl/pull/1181
