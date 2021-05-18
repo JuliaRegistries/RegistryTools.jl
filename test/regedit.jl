@@ -768,5 +768,9 @@ end
             """
     end
 end
+        
+@testset "The `RegistryTools.package_relpath` function" begin
+    @test RegistryTools.package_relpath("Example") == "E/Example"
+end
 
 end
