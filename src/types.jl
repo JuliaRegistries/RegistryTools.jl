@@ -153,7 +153,12 @@ end
 # Not using `joinpath` here since we don't want backslashes in
 # Registry.toml when running on Windows.
 function package_relpath(pkg::Pkg.Types.Project)
-    string(uppercase(pkg.name[1]), "/", pkg.name)
+    return package_relpath(pkg.name)
+end
+function package_relpath(pkg_name::String)
+    path_components = [uppercase(pkg_name[1]), pkg_name]
+    path_separator = "/"
+    return join(path_components, path_separator)
 end
 
 function Base.push!(reg::RegistryData, pkg::Pkg.Types.Project)
