@@ -126,7 +126,7 @@ end
         @test length(registry_data.packages) == 1
         @test haskey(registry_data.packages, string(example.uuid))
         @test registry_data.packages[string(example.uuid)]["name"] == "Example"
-        @test registry_data.packages[string(example.uuid)]["path"] == "E/Example"
+        @test registry_data.packages[string(example.uuid)]["path"] == RegistryTools.package_relpath("Example")
     end
 end
 
@@ -266,9 +266,9 @@ end
                                              uuid = "$(registry_uuid)"
 
                                              [packages]
-                                             $(package_uuid) = { name = "Example", path = "E/Example" }
+                                             $(package_uuid) = { name = "Example", path = "$(RegistryTools.package_relpath("Example"))" }
                                              """
-        @test isdir(joinpath(registry_path, "E", "Example"))
+        @test isdir(joinpath(registry_path, RegistryTools.package_relpath("Example")))
     end
 end
 
@@ -743,7 +743,8 @@ end
         check_and_update_registry_files(pkg, package_repo, tree_hash,
                                         registry_path,
                                         registry_deps_paths, status)
-        @test read(joinpath(registry_path, "E", "Example", "Package.toml"), String) ==
+        path = RegistryTools.package_relpath("Example")
+        @test read(joinpath(registry_path, path, "Package.toml"), String) ==
             """
             name = "Example"
             uuid = "d7508571-2240-4c50-b21c-240e414cc6d2"
@@ -759,7 +760,8 @@ end
                                         registry_path,
                                         registry_deps_paths, status,
                                         subdir = "packages/Dep")
-        @test read(joinpath(registry_path, "D", "Dep", "Package.toml"), String) ==
+        path = RegistryTools.package_relpath("Dep")
+        @test read(joinpath(registry_path, path, "Package.toml"), String) ==
             """
             name = "Dep"
             uuid = "49c7135d-e2b1-4bed-912f-5371fe4924fa"
@@ -768,7 +770,7 @@ end
             """
     end
 end
-        
+
 @testset "The `RegistryTools.package_relpath` function" begin
     @test RegistryTools.package_relpath("Example") == "E/Example"
 end
