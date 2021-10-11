@@ -22,19 +22,10 @@ function path(cache::RegistryCache, registry_url::AbstractString)
 end
 
 function get_registry_default_branch(git::Cmd)
-    s = try
-        eachline(`$git remote show origin`)
-    catch ex
-        if isa(ex, ProcessFailedException)
-            @error("Failed to get registry's default branch")
-        end
-        rethrow(ex)
-    end
-
-    lines = collect(s)
+    lines = collect(eachline(`$git remote show origin`))
     idx = findfirst(x -> occursin("HEAD branch", x), lines)
     if idx === nothing
-        error("Failed to get registry's default branch")
+        error("Failed to get default branch of registry")
     end
 
     strip(split(lines[idx], ":")[2])
