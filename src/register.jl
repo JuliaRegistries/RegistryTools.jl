@@ -657,8 +657,9 @@ function register(
         # branch registry repo
         @debug("branch registry repo")
         git = gitcmd(registry_path, gitconfig)
-        run(pipeline(`$git checkout -f master`; stdout=devnull))
-        if branch != "master"
+        registry_defbranch = get_registry_default_branch(git)
+        run(pipeline(`$git checkout -f $registry_defbranch`; stdout=devnull))
+        if branch != registry_defbranch
             run(pipeline(`$git branch -f $branch`; stdout=devnull))
             run(pipeline(`$git checkout -f $branch`; stdout=devnull))
         end
