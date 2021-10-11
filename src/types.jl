@@ -24,10 +24,7 @@ end
 function get_registry_default_branch(git::Cmd)
     lines = collect(eachline(`$git remote show origin`))
     idx = findfirst(x -> occursin("HEAD branch", x), lines)
-    if idx === nothing
-        error("Failed to get default branch of registry")
-    end
-
+    idx === nothing && error("Failed to get default branch of registry")
     strip(split(lines[idx], ":")[2])
 end
 
