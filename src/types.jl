@@ -21,6 +21,13 @@ function path(cache::RegistryCache, registry_url::AbstractString)
     path(cache, cache.registries[registry_url])
 end
 
+function get_registry_default_branch(git::Cmd)
+    lines = collect(eachline(`$git remote show origin`))
+    idx = findfirst(x -> occursin("HEAD branch", x), lines)
+    idx === nothing && error("Failed to get default branch of registry")
+    strip(split(lines[idx], ":")[2])
+end
+
 """
     RegEdit.get_registry(registry_url)
 
@@ -38,16 +45,17 @@ function get_registry(
 
         if !ispath(registry_path)
             mkpath(path(cache))
-            run(`git clone $registry_url $registry_path --branch=master`)
+            run(`git clone $registry_url $registry_path`)
         else
             # this is really annoying/impossible to do with LibGit2
             git = gitcmd(registry_path, gitconfig)
             run(`$git config remote.origin.url $registry_url`)
-            run(`$git checkout -q -f master`)
+            registry_defbranch = get_registry_default_branch(git)
+            run(`$git checkout -q -f $registry_defbranch`)
             # uses config because git versions <2.17.0 did not have the -P option
-            run(`$git -c fetch.pruneTags fetch -q origin master`)
+            run(`$git -c fetch.pruneTags fetch -q origin $registry_defbranch`)
             if force_reset
-                run(`$git reset -q --hard origin/master`)
+                run(`$git reset -q --hard origin/$registry_defbranch`)
             end
         end
     else
