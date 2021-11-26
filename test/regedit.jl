@@ -581,6 +581,8 @@ end
                 haserror(status) && break
             end
             # Test the return status of the last package registration.
+            @info "" status
+            @info "" test_data
             @test sort([check.id for check in status.triggered_checks]) == sort(test_data.status)
             # Add Registrator's errors before filling in RegBranch.
             union!(status.errors,
