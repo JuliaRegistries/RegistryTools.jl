@@ -1,4 +1,4 @@
-module RegistryTools
+module RegistryTools # hello world
 
 export RegBranch
 export register
