@@ -624,7 +624,7 @@ function register(
     checks_triggering_error = registrator_errors,
     push::Bool = false,
     force_reset::Bool = true,
-    branch::String = registration_branch(pkg),
+    branch::String = registration_branch(pkg; url=package_repo),
     cache::RegistryCache=REGISTRY_CACHE,
     gitconfig::Dict = Dict()
 )
