@@ -123,10 +123,6 @@ function set_metadata!(regbr::RegBranch, status::ReturnStatus)
             regbr.metadata[complaint] = "Package version must be greater than 0.0.0"
         elseif check == :new_package_label
             add_label!(regbr, "new package")
-        elseif check == :not_standard_first_version
-            regbr.metadata[complaint] =
-                """This looks like a new registration that registers version $(data.version).
-                Ideally, you should register an initial release with 0.0.1, 0.1.0 or 1.0.0 version numbers"""
         elseif check == :version_less_than_all_existing
             regbr.metadata[complaint] = "Version $(data.version) less than least existing version $(data.least)"
         elseif check == :version_exists
@@ -190,9 +186,6 @@ function check_version!(version::VersionNumber, existing::Vector{VersionNumber},
     @assert issorted(existing)
     if isempty(existing)
         add!(status, :new_package_label)
-        if !(version in [v"0.0.1", v"0.1", v"1"])
-            add!(status, :not_standard_first_version, (version = version,))
-        end
     else
         idx = searchsortedlast(existing, version)
         if idx <= 0
