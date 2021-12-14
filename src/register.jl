@@ -725,30 +725,24 @@ struct RegisterParams
     push::Bool
     gitconfig::Dict
 
-    function RegisterParams(
-                package_repo::AbstractString,
-                pkg::Pkg.Types.Project,
-                tree_sha::AbstractString;
-                registry::AbstractString=DEFAULT_REGISTRY_URL,
-                registry_fork::AbstractString=registry,
-                registry_deps::Vector{<:AbstractString}=[],
-                subdir::AbstractString="",
-                push::Bool=false,
-                gitconfig::Dict=Dict(),
-            )
-        new(
-            package_repo, pkg, tree_sha, registry, registry_fork,
-            registry_deps, subdir, push, gitconfig,
-        )
+    function RegisterParams(package_repo::AbstractString,
+                            pkg::Pkg.Types.Project,
+                            tree_sha::AbstractString;
+                            registry::AbstractString=DEFAULT_REGISTRY_URL,
+                            registry_fork::AbstractString=registry,
+                            registry_deps::Vector{<:AbstractString}=[],
+                            subdir::AbstractString="",
+                            push::Bool=false,
+                            gitconfig::Dict=Dict(),)
+        new(package_repo, pkg, tree_sha, registry, registry_fork,
+            registry_deps, subdir, push, gitconfig,)
     end
 end
 
-register(regp::RegisterParams) = register(
-    regp.package_repo, regp.pkg, regp.tree_sha;
-    registry=regp.registry, registry_fork=regp.registry_fork,
-    registry_deps=regp.registry_deps,
-    subdir=regp.subdir, push=regp.push, gitconfig=regp.gitconfig,
-)
+register(regp::RegisterParams) = register(regp.package_repo, regp.pkg, regp.tree_sha;
+                                          registry=regp.registry, registry_fork=regp.registry_fork,
+                                          registry_deps=regp.registry_deps,
+                                          subdir=regp.subdir, push=regp.push, gitconfig=regp.gitconfig,)
 
 """
     find_registered_version(pkg, registry_path)
