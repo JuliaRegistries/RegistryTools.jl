@@ -595,7 +595,7 @@ function check_and_update_registry_files(pkg, package_repo, tree_hash,
 end
 
 """
-    register(package_repo, pkg, tree_hash; registry, registry_deps, push, gitconfig)
+    register(package_repo, pkg, tree_hash; registry, registry_fork, registry_deps, push, gitconfig)
 
 Register the package at `package_repo` / `tree_hash` in `registry`.
 Returns a `RegEdit.RegBranch` which contains information about the registration and/or any
@@ -610,6 +610,7 @@ errors or warnings that occurred.
 # Keyword Arguments
 
 * `registry::AbstractString="$DEFAULT_REGISTRY_URL"`: the git repository URL for the registry
+* `registry_fork::AbstractString=registry: the git repository URL for a fork of the registry
 * `registry_deps::Vector{String}=[]`: the git repository URLs for any registries containing
     packages depended on by `pkg`
 * `subdir::AbstractString=""`: path to package within `package_repo`
@@ -619,6 +620,7 @@ errors or warnings that occurred.
 function register(
     package_repo::AbstractString, pkg::Pkg.Types.Project, tree_hash::AbstractString;
     registry::AbstractString = DEFAULT_REGISTRY_URL,
+    registry_fork::AbstractString = registry,
     registry_deps::Vector{<:AbstractString} = AbstractString[],
     subdir::AbstractString = "",
     checks_triggering_error = registrator_errors,
@@ -693,6 +695,7 @@ function register(
         # push -f branch to remote
         if push
             @debug("push -f branch to remote")
+            run(pipeline(`$git remote set-url --push origin $registry_fork`))
             run(pipeline(`$git push -f -u origin $branch`; stdout=devnull))
         else
             @debug("skipping git push")
@@ -716,6 +719,7 @@ struct RegisterParams
     pkg::Pkg.Types.Project
     tree_sha::AbstractString
     registry::AbstractString
+    registry_fork::AbstractString
     registry_deps::Vector{<:AbstractString}
     subdir::AbstractString
     push::Bool
@@ -725,19 +729,20 @@ struct RegisterParams
                             pkg::Pkg.Types.Project,
                             tree_sha::AbstractString;
                             registry::AbstractString=DEFAULT_REGISTRY_URL,
+                            registry_fork::AbstractString=registry,
                             registry_deps::Vector{<:AbstractString}=[],
                             subdir::AbstractString="",
                             push::Bool=false,
-                            gitconfig::Dict=Dict())
-        new(package_repo, pkg, tree_sha,
-            registry, registry_deps, subdir,
-            push, gitconfig)
+                            gitconfig::Dict=Dict(),)
+        new(package_repo, pkg, tree_sha, registry, registry_fork,
+            registry_deps, subdir, push, gitconfig,)
     end
 end
 
 register(regp::RegisterParams) = register(regp.package_repo, regp.pkg, regp.tree_sha;
-                                          registry=regp.registry, registry_deps=regp.registry_deps,
-                                          subdir=regp.subdir, push=regp.push, gitconfig=regp.gitconfig)
+                                          registry=regp.registry, registry_fork=regp.registry_fork,
+                                          registry_deps=regp.registry_deps,
+                                          subdir=regp.subdir, push=regp.push, gitconfig=regp.gitconfig,)
 
 """
     find_registered_version(pkg, registry_path)
