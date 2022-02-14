@@ -703,8 +703,9 @@ function register(
 
         clean_registry = false
     catch ex
-        println(get_backtrace(ex))
-        add!(status, :unexpected_registration_error)
+        @error("Unexpected error while registering", stacktrace=get_backtrace(ex))
+        err = :unexpected_registration_error
+        add!(status, err)
     finally
         if clean_registry
             @debug("cleaning up possibly inconsistent registry", registry_path=showsafe(registry_path), err=showsafe(err))
