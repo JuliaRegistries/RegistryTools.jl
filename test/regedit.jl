@@ -34,7 +34,7 @@ const TEST_SIGNATURE = LibGit2.Signature(
             "uuid" => "698ec630-83b2-4a6d-81d4-a10176273030"
         ))
         url = "https://julialang.org/"
-        @test registration_branch(example; url=url) == "registrator/example/698ec630/v1.10.2-0251df46a9"
+        @test registration_branch(example; url=url) == "registrator-example-698ec630-v1.10.2-0251df46a9"
     end
 end
 
