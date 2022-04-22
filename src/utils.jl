@@ -19,5 +19,5 @@ Generate the name for the registry branch used to register the package version.
 function registration_branch(pkg::Pkg.Types.Project; url::String)
     url_hash = bytes2hex(SHA.sha256(url))
     url_hash_trunc = url_hash[1:10]
-    return "registrator/$(lowercase(pkg.name))/$(string(pkg.uuid)[1:8])/v$(pkg.version)/$(url_hash_trunc)"
+    return "registrator-$(lowercase(pkg.name))-$(string(pkg.uuid)[1:8])-v$(pkg.version)-$(url_hash_trunc)"
 end
