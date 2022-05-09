@@ -7,7 +7,7 @@ stored in a subdirectory corresponding to the registry's UUID.
 Maintains a dictionary `registries` which maps registry repository URLs to UUIDs.
 """
 struct RegistryCache
-    path::String
+    path::AbstractString
     registries::Dict{String, UUID}
 end
 
@@ -76,7 +76,7 @@ function get_registry(
 end
 
 @auto_hash_equals struct RegistryData
-    name::String
+    name::AbstractString
     uuid::UUID
     repo::Union{String, Nothing}
     description::Union{String, Nothing}
@@ -163,7 +163,7 @@ end
 function package_relpath(pkg::Pkg.Types.Project)
     return package_relpath(pkg.name)
 end
-function package_relpath(pkg_name::String)
+function package_relpath(pkg_name::AbstractString)
     path_components = [uppercase(pkg_name[1]), pkg_name]
     path_separator = "/"
     return join(path_components, path_separator)

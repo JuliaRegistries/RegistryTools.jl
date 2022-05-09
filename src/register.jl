@@ -92,9 +92,9 @@ end
 haserror(status::ReturnStatus) = status.error_found
 
 struct RegBranch
-    name::String
+    name::AbstractString
     version::VersionNumber
-    branch::String
+    branch::AbstractString
 
     metadata::Dict{String, Any} # "error", "warning", kind etc.
 
@@ -626,7 +626,7 @@ function register(
     checks_triggering_error = registrator_errors,
     push::Bool = false,
     force_reset::Bool = true,
-    branch::String = registration_branch(pkg; url=package_repo),
+    branch::AbstractString = registration_branch(pkg; url=package_repo),
     cache::RegistryCache=REGISTRY_CACHE,
     gitconfig::Dict = Dict()
 )
