@@ -92,9 +92,9 @@ end
 haserror(status::ReturnStatus) = status.error_found
 
 struct RegBranch
-    name::AbstractString
+    name::String
     version::VersionNumber
-    branch::AbstractString
+    branch::String
 
     metadata::Dict{String, Any} # "error", "warning", kind etc.
 
@@ -715,13 +715,13 @@ function register(
 end
 
 struct RegisterParams
-    package_repo::AbstractString
+    package_repo::String
     pkg::Pkg.Types.Project
-    tree_sha::AbstractString
-    registry::AbstractString
-    registry_fork::AbstractString
-    registry_deps::Vector{<:AbstractString}
-    subdir::AbstractString
+    tree_sha::String
+    registry::String
+    registry_fork::String
+    registry_deps::Vector{<:String}
+    subdir::String
     push::Bool
     gitconfig::Dict
 
