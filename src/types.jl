@@ -163,7 +163,7 @@ end
 function package_relpath(pkg::Pkg.Types.Project)
     return package_relpath(pkg.name)
 end
-function package_relpath(pkg_name::String)
+function package_relpath(pkg_name::AbstractString)
     path_components = [uppercase(pkg_name[1]), pkg_name]
     path_separator = "/"
     return join(path_components, path_separator)

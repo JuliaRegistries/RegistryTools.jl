@@ -44,13 +44,13 @@ function compress_versions(pool::Vector{VersionNumber}, subset)
     compress_versions(pool, filter(in(subset), pool))
 end
 
-function load_versions(path::String)
+function load_versions(path::AbstractString)
     versions_file = joinpath(dirname(path), "Versions.toml")
     versions_dict = TOML.parsefile(versions_file)
     sort!([VersionNumber(v) for v in keys(versions_dict)])
 end
 
-function load(path::String,
+function load(path::AbstractString,
               versions::Vector{VersionNumber} = load_versions(path))
     compressed = TOML.parsefile(path)
     uncompressed = Dict{VersionNumber,Dict{Any,Any}}()
@@ -71,7 +71,7 @@ function load(path::String,
     return uncompressed
 end
 
-function compress(path::String, uncompressed::Dict,
+function compress(path::AbstractString, uncompressed::Dict,
                   versions::Vector{VersionNumber} = load_versions(path))
     inverted = Dict{Pair{String,Any},Vector{VersionNumber}}()
     for (ver, data) in uncompressed, (key, val) in data
@@ -87,7 +87,7 @@ function compress(path::String, uncompressed::Dict,
     return compressed
 end
 
-function save(path::String, uncompressed::Dict,
+function save(path::AbstractString, uncompressed::Dict,
               versions::Vector{VersionNumber} = load_versions(path))
     compressed = compress(path, uncompressed)
     open(path, write=true) do io

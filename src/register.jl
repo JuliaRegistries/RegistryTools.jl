@@ -626,7 +626,7 @@ function register(
     checks_triggering_error = registrator_errors,
     push::Bool = false,
     force_reset::Bool = true,
-    branch::String = registration_branch(pkg; url=package_repo),
+    branch::AbstractString = registration_branch(pkg; url=package_repo),
     cache::RegistryCache=REGISTRY_CACHE,
     gitconfig::Dict = Dict()
 )
@@ -715,13 +715,13 @@ function register(
 end
 
 struct RegisterParams
-    package_repo::AbstractString
+    package_repo::String
     pkg::Pkg.Types.Project
-    tree_sha::AbstractString
-    registry::AbstractString
-    registry_fork::AbstractString
-    registry_deps::Vector{<:AbstractString}
-    subdir::AbstractString
+    tree_sha::String
+    registry::String
+    registry_fork::String
+    registry_deps::Vector{<:String}
+    subdir::String
     push::Bool
     gitconfig::Dict
 
