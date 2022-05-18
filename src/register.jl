@@ -653,8 +653,6 @@ function register(
         LibGit2.path(get_registry(GitTools.normalize_url(registry); gitconfig=gitconfig, force_reset=force_reset, cache=cache))
     end
 
-    clean_registry = true
-    err = nothing
     try
         # branch registry repo
         @debug("branch registry repo")
@@ -700,17 +698,11 @@ function register(
         else
             @debug("skipping git push")
         end
-
-        clean_registry = false
     catch ex
         @error("Unexpected error while registering", stacktrace=get_backtrace(ex))
-        err = :unexpected_registration_error
-        add!(status, err)
-    finally
-        if clean_registry
-            @debug("cleaning up possibly inconsistent registry", registry_path=showsafe(registry_path), err=showsafe(err))
-            rm(registry_path; recursive=true, force=true)
-        end
+        add!(status, :unexpected_registration_error)
+        @debug("cleaning up possibly inconsistent registry", registry_path=showsafe(registry_path))
+        rm(registry_path; recursive=true, force=true)
     end
     return set_metadata!(regbr, status)
 end
