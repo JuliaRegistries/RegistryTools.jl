@@ -433,6 +433,9 @@ function update_deps_file(pkg::Pkg.Types.Project,
     end
 
     deps_data[pkg.version] = pkg.deps
+    @static if hasfield(Pkg.Types.Project, :_deps_weak)
+        merge!(deps_data[pkg.version], pkg._deps_weak)
+    end
     Compress.save(deps_file, deps_data)
 end
 
