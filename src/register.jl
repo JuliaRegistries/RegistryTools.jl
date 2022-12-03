@@ -47,6 +47,13 @@ for the project file in that tree and a hash string for the tree.
 #     end
 # end
 
+function getdeps(pkg)
+    if PKG_HAS_WEAK
+        return merge(pkg.deps, pkg._deps_weak)
+    end
+    return pkg.deps
+end
+
 # These can compromise the integrity of the registry and cannot be
 # opted out of.
 const mandatory_errors = [:version_exists,
@@ -404,16 +411,20 @@ end
 function check_deps!(pkg::Pkg.Types.Project,
                      regdata::Vector{RegistryData},
                      status::ReturnStatus)
-    if pkg.name in keys(pkg.deps)
-        err = :package_self_dep
-        @debug(err)
-        add!(status, err, (name = pkg.name,))
-        haserror(status) && return
-    end
+    depses = [getdeps(pkg)]
+    PKG_HAS_WEAK && push!(depses, pkg.weakdeps)
+    for deps in depses
+        if pkg.name in keys(deps)
+            err = :package_self_dep
+            @debug(err)
+            add!(status, err, (name = pkg.name,))
+            haserror(status) && return
+        end
 
-    @debug("Verifying package name and uuid in deps")
-    for (name, uuid) in pkg.deps
-        findpackageerror!(name, uuid, regdata, status)
+        @debug("Verifying package name and uuid in deps/weakdeps")
+        for (name, uuid) in deps
+            findpackageerror!(name, uuid, regdata, status)
+        end
     end
 end
 
@@ -425,15 +436,19 @@ end
 function update_deps_file(pkg::Pkg.Types.Project,
                           package_path::AbstractString,
                           old_versions::Vector{VersionNumber})
-    deps_file = joinpath(package_path, "Deps.toml")
-    if isfile(deps_file)
-        deps_data = Compress.load(deps_file, old_versions)
-    else
-        deps_data = Dict()
-    end
+    file_depses = [("Deps.toml", getdeps(pkg))]
+    PKG_HAS_WEAK && push!(file_depses, ("WeakDeps.toml", pkg.weakdeps))
+    for (file, deps) in file_depses
+        deps_file = joinpath(package_path, file)
+        if isfile(deps_file)
+            deps_data = Compress.load(deps_file, old_versions)
+        else
+            deps_data = Dict()
+        end
 
-    deps_data[pkg.version] = pkg.deps
-    Compress.save(deps_file, deps_data)
+        deps_data[pkg.version] = deps
+        Compress.save(deps_file, deps_data)
+    end
 end
 
 function check_compat!(pkg::Pkg.Types.Project,
@@ -443,7 +458,7 @@ function check_compat!(pkg::Pkg.Types.Project,
     if haskey(pkg.compat, "julia")
         if Base.VERSION >= v"1.7-"
             ver = pkg.compat["julia"].val
-        else 
+        else
             ver = Pkg.Types.semver_spec(pkg.compat["julia"])
         end
         if any(map(x -> !isempty(intersect(Pkg.Types.VersionRange("0-0.6"), x)), ver.ranges))
@@ -459,9 +474,10 @@ function check_compat!(pkg::Pkg.Types.Project,
     # entries not mentioned in deps, nor in extras.
     invalid_compats = []
     for name in keys(pkg.compat)
-        indeps = haskey(pkg.deps, name)
+        indeps = haskey(getdeps(pkg), name)
         inextras = haskey(pkg.extras, name)
-        if !indeps && !inextras && name != "julia"
+        inweaks = PKG_HAS_WEAK ? haskey(pkg.weakdeps, name) : false
+        if !(indeps || inextras || inweaks || name == "julia")
             push!(invalid_compats, name)
         end
     end
@@ -482,11 +498,11 @@ function check_compat!(pkg::Pkg.Types.Project,
     # anyway.
     for name in keys(pkg.compat)
         if name != "julia"
-            indeps = haskey(pkg.deps, name)
+            indeps = haskey(getdeps(pkg), name)
             inextras = haskey(pkg.extras, name)
 
             if indeps
-                uuidofdep = string(pkg.deps[name])
+                uuidofdep = string(getdeps(pkg)[name])
                 findpackageerror!(name, uuidofdep, regdata, status)
             elseif inextras
                 uuidofdep = string(pkg.extras[name])
@@ -506,36 +522,45 @@ function update_compat_file(pkg::Pkg.Types.Project,
                             package_path::AbstractString,
                             old_versions::Vector{VersionNumber})
     @debug("update package data: compat file")
-    compat_file = joinpath(package_path, "Compat.toml")
-    if isfile(compat_file)
-        compat_data = Compress.load(compat_file, old_versions)
-    else
-        compat_data = Dict()
-    end
 
-    d = Dict()
-    for (name, version) in pkg.compat
-        if !haskey(pkg.deps, name) && name != "julia"
-            @debug("$name is a test-only dependency; omitting from Compat.toml")
-            continue
-        end
-
-        if Base.VERSION >= v"1.7-"
-            spec = version.val
+    file_depses = [("Compat.toml", getdeps(pkg))]
+    PKG_HAS_WEAK && push!(file_depses, ("WeakCompat.toml", pkg.weakdeps))
+    for (file, deps) in file_depses
+        compat_file = joinpath(package_path, file)
+        if isfile(compat_file)
+            compat_data = Compress.load(compat_file, old_versions)
         else
-            spec = Pkg.Types.semver_spec(version)
+            compat_data = Dict()
         end
-        # The call to `map(versionrange, )` can be removed
-        # once Pkg is updated to a version including
-        # https://github.com/JuliaLang/Pkg.jl/pull/1181
-        # and support for older versions is dropped.
-        ranges = map(r->versionrange(r.lower, r.upper), spec.ranges)
-        ranges = VersionSpec(ranges).ranges # this combines joinable ranges
-        d[name] = length(ranges) == 1 ? string(ranges[1]) : map(string, ranges)
-    end
 
-    compat_data[pkg.version] = d
-    Compress.save(compat_file, compat_data)
+        d = Dict()
+        for (name, version) in pkg.compat
+            # Ignore julia compat for weak
+            if file == "WeakCompat.toml" && name == "julia"
+                continue
+            end
+            if !haskey(deps, name) && name != "julia"
+                @debug("$name is a not in relevant dependency list; omitting from Compat.toml")
+                continue
+            end
+
+            if Base.VERSION >= v"1.7-"
+                spec = version.val
+            else
+                spec = Pkg.Types.semver_spec(version)
+            end
+            # The call to `map(versionrange, )` can be removed
+            # once Pkg is updated to a version including
+            # https://github.com/JuliaLang/Pkg.jl/pull/1181
+            # and support for older versions is dropped.
+            ranges = map(r->versionrange(r.lower, r.upper), spec.ranges)
+            ranges = VersionSpec(ranges).ranges # this combines joinable ranges
+            d[name] = length(ranges) == 1 ? string(ranges[1]) : map(string, ranges)
+        end
+
+        compat_data[pkg.version] = d
+        Compress.save(compat_file, compat_data)
+    end
 end
 
 function get_registrator_tree_sha()
