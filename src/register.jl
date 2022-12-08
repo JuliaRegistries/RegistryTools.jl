@@ -439,7 +439,7 @@ function update_deps_file(pkg::Pkg.Types.Project,
                           package_path::AbstractString,
                           old_versions::Vector{VersionNumber})
     file_depses = [("Deps.toml", getdeps(pkg))]
-    PKG_HAS_WEAK && push!(file_depses, ("WeakDeps.toml", pkg.weakdeps)) 
+    PKG_HAS_WEAK && push!(file_depses, ("WeakDeps.toml", pkg.weakdeps))
     for (file, deps) in file_depses
         deps_file = joinpath(package_path, file)
         if isfile(deps_file)
@@ -460,7 +460,7 @@ function check_compat!(pkg::Pkg.Types.Project,
     if haskey(pkg.compat, "julia")
         if Base.VERSION >= v"1.7-"
             ver = pkg.compat["julia"].val
-        else 
+        else
             ver = Pkg.Types.semver_spec(pkg.compat["julia"])
         end
         if any(map(x -> !isempty(intersect(Pkg.Types.VersionRange("0-0.6"), x)), ver.ranges))
@@ -524,9 +524,9 @@ function update_compat_file(pkg::Pkg.Types.Project,
                             package_path::AbstractString,
                             old_versions::Vector{VersionNumber})
     @debug("update package data: compat file")
-    
+
     file_depses = [("Compat.toml", getdeps(pkg))]
-    PKG_HAS_WEAK && push!(file_depses, ("WeakCompat.toml", pkg.weakdeps)) 
+    PKG_HAS_WEAK && push!(file_depses, ("WeakCompat.toml", pkg.weakdeps))
     for (file, deps) in file_depses
         compat_file = joinpath(package_path, file)
         if isfile(compat_file)
@@ -537,6 +537,10 @@ function update_compat_file(pkg::Pkg.Types.Project,
 
         d = Dict()
         for (name, version) in pkg.compat
+            # Ignore julia compat for weak
+            if file == "WeakCompat.toml" && name == "julia"
+                continue
+            end
             if !haskey(deps, name) && name != "julia"
                 @debug("$name is a not in relevant dependency list; omitting from Compat.toml")
                 continue
