@@ -20,6 +20,13 @@ const TEST_SIGNATURE = LibGit2.Signature(
     TEST_GITCONFIG["user.email"],
 )
 
+function create_empty_registry(registry_path, registry_name, registry_uuid)
+    mkpath(registry_path)
+    registry_file = joinpath(registry_path, "Registry.toml")
+    registry_data = RegistryTools.RegistryData(registry_name, registry_uuid)
+    RegistryTools.write_registry(registry_file, registry_data)
+end
+
 @testset "RegistryTools" begin
 
 @testset "Utilities" begin
@@ -238,13 +245,6 @@ end
         @test check_package!(repo, package_path, status) == repo
         @test !haserror(status)
     end
-end
-
-function create_empty_registry(registry_path, registry_name, registry_uuid)
-    mkpath(registry_path)
-    registry_file = joinpath(registry_path, "Registry.toml")
-    registry_data = RegistryTools.RegistryData(registry_name, registry_uuid)
-    RegistryTools.write_registry(registry_file, registry_data)
 end
 
 @testset "find_package_in_registry" begin
@@ -770,6 +770,49 @@ end
             subdir = "packages/Dep"
             """
     end
+end
+
+if RegistryTools.PKG_HAS_WEAK
+@testset "weakdeps" begin
+    import RegistryTools: ReturnStatus, check_and_update_registry_files
+    import Pkg.Types: read_project
+
+    temp_dir = mktempdir(; cleanup=false)
+    mktempdir(@__DIR__) do temp_dir
+        registry_path = joinpath(temp_dir, "registry")
+        projects_path = joinpath(@__DIR__, "project_files")
+        registry_deps_paths = String[]
+        tree_hash = repeat("0", 40)
+        # Start with an empty registry.
+        create_empty_registry(registry_path, "TestRegistry",
+                              "d4e2f5cd-0f48-4704-9988-f1754e755b45")
+        project_file = joinpath(projects_path, "Example19.toml")
+        pkg = read_project(project_file)
+        status = ReturnStatus()
+        package_repo = "http://example.com/Example1.git"
+        check_and_update_registry_files(pkg, package_repo, tree_hash,
+                                        registry_path,
+                                        registry_deps_paths, status)
+        path = RegistryTools.package_relpath("Example")
+        @test read(joinpath(registry_path, path, "Compat.toml"), String) ==
+            """
+            [1]
+            UUIDs = "1.8.0-1"
+            julia = "1.1.0-1"
+            """
+        @test read(joinpath(registry_path, path, "WeakCompat.toml"), String) ==
+            """
+            [1]
+            UUIDs = "1.8.0-1"
+            """
+        @test read(joinpath(registry_path, path, "Deps.toml"), String) ==
+              read(joinpath(registry_path, path, "WeakDeps.toml"), String) ==
+            """
+            [1]
+            UUIDs = "cf7118a7-6976-5b1a-9a39-7adc72f591a4"
+            """
+    end
+end
 end
 
 @testset "The `RegistryTools.package_relpath` function" begin
