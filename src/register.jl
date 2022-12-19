@@ -447,7 +447,9 @@ function update_deps_file(pkg::Pkg.Types.Project,
         end
 
         deps_data[pkg.version] = deps
-        Compress.save(deps_file, deps_data)
+        if !isempty(deps_data) && !all(isempty, values(deps_data))
+            Compress.save(deps_file, deps_data)
+        end
     end
 end
 
@@ -559,7 +561,9 @@ function update_compat_file(pkg::Pkg.Types.Project,
         end
 
         compat_data[pkg.version] = d
-        Compress.save(compat_file, compat_data)
+        if !isempty(compat_data) && !all(isempty, values(compat_data))
+            Compress.save(compat_file, compat_data)
+        end
     end
 end
 
