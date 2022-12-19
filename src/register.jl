@@ -35,7 +35,7 @@ for the project file in that tree and a hash string for the tree.
 #
 #         # parse the project file
 #         @debug("parse the project file")
-#         project = Pkg.Types.read_project(project_file)
+#         project = Pkg.Types.project_file
 #         project.name === nothing &&
 #             error("$remote_url $(repr(tree_spec)): package has no name")
 #         project.uuid === nothing &&
@@ -47,12 +47,6 @@ for the project file in that tree and a hash string for the tree.
 #     end
 # end
 
-function getdeps(pkg)
-    if PKG_HAS_WEAK
-        return merge(pkg.deps, pkg._deps_weak)
-    end
-    return pkg.deps
-end
 
 # These can compromise the integrity of the registry and cannot be
 # opted out of.
@@ -105,7 +99,7 @@ struct RegBranch
 
     metadata::Dict{String, Any} # "error", "warning", kind etc.
 
-    function RegBranch(pkg::Pkg.Types.Project, branch::AbstractString)
+    function RegBranch(pkg::Project, branch::AbstractString)
         new(pkg.name, pkg.version, branch, Dict{String,Any}())
     end
 end
@@ -282,7 +276,7 @@ function versionrange(lo::VersionBound, hi::VersionBound)
     return VersionRange(lo, hi)
 end
 
-function find_package_in_registry(pkg::Pkg.Types.Project,
+function find_package_in_registry(pkg::Project,
                                   registry_file::AbstractString,
                                   registry_path::AbstractString,
                                   registry_data::RegistryData,
@@ -346,7 +340,7 @@ function check_package!(package_repo::AbstractString,
     return package_repo
 end
 
-function update_package_file(pkg::Pkg.Types.Project,
+function update_package_file(pkg::Project,
                              package_repo::AbstractString,
                              subdir::AbstractString,
                              package_path::AbstractString)
@@ -371,7 +365,7 @@ function get_versions_file(package_path::AbstractString)
     return filename, data
 end
 
-function check_versions!(pkg::Pkg.Types.Project,
+function check_versions!(pkg::Project,
                          versions_data::Dict{String, Any},
                          status::ReturnStatus)
     versions = sort!([VersionNumber(v) for v in keys(versions_data)])
@@ -379,7 +373,7 @@ function check_versions!(pkg::Pkg.Types.Project,
     return versions
 end
 
-function update_versions_file(pkg::Pkg.Types.Project,
+function update_versions_file(pkg::Project,
                               versions_file::AbstractString,
                               versions_data::Dict{String, Any},
                               tree_hash::AbstractString)
@@ -408,12 +402,10 @@ function update_versions_file(pkg::Pkg.Types.Project,
     end
 end
 
-function check_deps!(pkg::Pkg.Types.Project,
+function check_deps!(pkg::Project,
                      regdata::Vector{RegistryData},
                      status::ReturnStatus)
-    depses = [getdeps(pkg)]
-    PKG_HAS_WEAK && push!(depses, pkg.weakdeps)
-    for deps in depses
+    for deps in [pkg.deps, pkg.weakdeps]
         if pkg.name in keys(deps)
             err = :package_self_dep
             @debug(err)
@@ -433,12 +425,10 @@ end
 # Versions.toml after update. This is handled with the `old_versions'
 # argument and the assumption that Versions.toml has been updated with
 # the new version before calling this function.
-function update_deps_file(pkg::Pkg.Types.Project,
+function update_deps_file(pkg::Project,
                           package_path::AbstractString,
                           old_versions::Vector{VersionNumber})
-    file_depses = [("Deps.toml", getdeps(pkg))]
-    PKG_HAS_WEAK && push!(file_depses, ("WeakDeps.toml", pkg.weakdeps))
-    for (file, deps) in file_depses
+    for (file, deps) in [("Deps.toml", pkg.deps), ("WeakDeps.toml", pkg.weakdeps)]
         deps_file = joinpath(package_path, file)
         if isfile(deps_file)
             deps_data = Compress.load(deps_file, old_versions)
@@ -453,17 +443,12 @@ function update_deps_file(pkg::Pkg.Types.Project,
     end
 end
 
-function check_compat!(pkg::Pkg.Types.Project,
+function check_compat!(pkg::Project,
                        regdata::Vector{RegistryData},
-                       regpaths::Vector{String},
                        status::ReturnStatus)
     if haskey(pkg.compat, "julia")
-        if Base.VERSION >= v"1.7-"
-            ver = pkg.compat["julia"].val
-        else
-            ver = Pkg.Types.semver_spec(pkg.compat["julia"])
-        end
-        if any(map(x -> !isempty(intersect(Pkg.Types.VersionRange("0-0.6"), x)), ver.ranges))
+        ver = Pkg.Types.semver_spec(pkg.compat["julia"])
+        if any(map(x -> !isempty(intersect(VersionRange("0-0.6"), x)), ver.ranges))
             err = :julia_before_07_in_compat
             @debug(err)
             add!(status, err)
@@ -476,9 +461,9 @@ function check_compat!(pkg::Pkg.Types.Project,
     # entries not mentioned in deps, nor in extras.
     invalid_compats = []
     for name in keys(pkg.compat)
-        indeps = haskey(getdeps(pkg), name)
-        inextras = haskey(pkg.extras, name)
-        inweaks = PKG_HAS_WEAK ? haskey(pkg.weakdeps, name) : false
+        indeps   = haskey(pkg.deps,     name)
+        inextras = haskey(pkg.extras,   name)
+        inweaks  = haskey(pkg.weakdeps, name)
         if !(indeps || inextras || inweaks || name == "julia")
             push!(invalid_compats, name)
         end
@@ -500,11 +485,11 @@ function check_compat!(pkg::Pkg.Types.Project,
     # anyway.
     for name in keys(pkg.compat)
         if name != "julia"
-            indeps = haskey(getdeps(pkg), name)
+            indeps   = haskey(pkg.deps,   name)
             inextras = haskey(pkg.extras, name)
 
             if indeps
-                uuidofdep = string(getdeps(pkg)[name])
+                uuidofdep = string(pkg.deps[name])
                 findpackageerror!(name, uuidofdep, regdata, status)
             elseif inextras
                 uuidofdep = string(pkg.extras[name])
@@ -520,14 +505,12 @@ end
 
 # See the comments for `update_deps_file` for the rationale for the
 # `old_versions` argument.
-function update_compat_file(pkg::Pkg.Types.Project,
+function update_compat_file(pkg::Project,
                             package_path::AbstractString,
                             old_versions::Vector{VersionNumber})
     @debug("update package data: compat file")
 
-    file_depses = [("Compat.toml", getdeps(pkg))]
-    PKG_HAS_WEAK && push!(file_depses, ("WeakCompat.toml", pkg.weakdeps))
-    for (file, deps) in file_depses
+    for (file, deps) in [("Compat.toml", pkg.deps), ("WeakCompat.toml", pkg.weakdeps)]
         compat_file = joinpath(package_path, file)
         if isfile(compat_file)
             compat_data = Compress.load(compat_file, old_versions)
@@ -546,11 +529,8 @@ function update_compat_file(pkg::Pkg.Types.Project,
                 continue
             end
 
-            if Base.VERSION >= v"1.7-"
-                spec = version.val
-            else
-                spec = Pkg.Types.semver_spec(version)
-            end
+            spec = Pkg.Types.semver_spec(version)
+
             # The call to `map(versionrange, )` can be removed
             # once Pkg is updated to a version including
             # https://github.com/JuliaLang/Pkg.jl/pull/1181
@@ -568,6 +548,7 @@ function update_compat_file(pkg::Pkg.Types.Project,
 end
 
 function get_registrator_tree_sha()
+    # TODO: Rewrite this to not use as much Pkg internals
     # If Registrator is in the manifest, return its tree-sha.
     # Otherwise return the tree-sha for RegistryTools.
     manifest = Pkg.Types.Context().env.manifest
@@ -581,7 +562,7 @@ function get_registrator_tree_sha()
     return "unknown"
 end
 
-function check_and_update_registry_files(pkg, package_repo, tree_hash,
+function check_and_update_registry_files(pkg::Project, package_repo, tree_hash,
                                          registry_path, registry_deps_paths,
                                          status; subdir = "")
     # find package in registry
@@ -618,7 +599,7 @@ function check_and_update_registry_files(pkg, package_repo, tree_hash,
     # update package data: compat file
     @debug("check compat section")
     regpaths = [registry_path; registry_deps_paths]
-    check_compat!(pkg, regdata, regpaths, status)
+    check_compat!(pkg, regdata, status)
     haserror(status) && return
     update_compat_file(pkg, package_path, old_versions)
 end
@@ -633,7 +614,7 @@ errors or warnings that occurred.
 # Arguments
 
 * `package_repo::AbstractString`: The git repository URL for the package to be registered. If empty, keep the stored repository URL.
-* `pkg::Pkg.Types.Project`: the parsed (Julia)Project.toml file for the package to be registered
+* `pkg::String`: the path of the project file for the package to be registered
 * `tree_hash::AbstractString`: the tree hash (not commit hash) of the package revision to be registered
 
 # Keyword Arguments
@@ -647,7 +628,7 @@ errors or warnings that occurred.
 * `gitconfig::Dict=Dict()`: dictionary of configuration options for the `git` command
 """
 function register(
-    package_repo::AbstractString, pkg::Pkg.Types.Project, tree_hash::AbstractString;
+    package_repo::AbstractString, pkg::Union{String, Project}, tree_hash::AbstractString;
     registry::AbstractString = DEFAULT_REGISTRY_URL,
     registry_fork::AbstractString = registry,
     registry_deps::Vector{<:AbstractString} = AbstractString[],
@@ -659,6 +640,10 @@ function register(
     cache::RegistryCache=REGISTRY_CACHE,
     gitconfig::Dict = Dict()
 )
+    if pkg isa String
+        pkg = Project(pkg)
+    end
+
     # get info from package registry
     @debug("get info from package registry")
     if !isempty(package_repo)
@@ -736,9 +721,10 @@ function register(
     return set_metadata!(regbr, status)
 end
 
+# TODO: Move to Registrator.jl?
 struct RegisterParams
     package_repo::String
-    pkg::Pkg.Types.Project
+    pkg::Project
     tree_sha::String
     registry::String
     registry_fork::String
@@ -746,19 +732,6 @@ struct RegisterParams
     subdir::String
     push::Bool
     gitconfig::Dict
-
-    function RegisterParams(package_repo::AbstractString,
-                            pkg::Pkg.Types.Project,
-                            tree_sha::AbstractString;
-                            registry::AbstractString=DEFAULT_REGISTRY_URL,
-                            registry_fork::AbstractString=registry,
-                            registry_deps::Vector{<:AbstractString}=[],
-                            subdir::AbstractString="",
-                            push::Bool=false,
-                            gitconfig::Dict=Dict(),)
-        new(package_repo, pkg, tree_sha, registry, registry_fork,
-            registry_deps, subdir, push, gitconfig,)
-    end
 end
 
 register(regp::RegisterParams) = register(regp.package_repo, regp.pkg, regp.tree_sha;
@@ -773,7 +746,7 @@ If the package and version specified by `pkg` exists in the registry
 at `registry_path`, return its tree hash. Otherwise return the empty
 string.
 """
-function find_registered_version(pkg::Pkg.Types.Project,
+function find_registered_version(pkg::Project,
                                  registry_path::AbstractString)
     registry_file = joinpath(registry_path, "Registry.toml")
     registry_data = parse_registry(registry_file)
