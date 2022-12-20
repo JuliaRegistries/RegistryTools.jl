@@ -623,7 +623,7 @@ end
 # package. The registration is pushed to a new branch via a file URL.
 @testset "register" begin
     mktempdir(@__DIR__) do temp_dir
-        registry1_path = joinpath(@__DIR__, temp_dir, "Registry1")
+        registry1_path = joinpath(temp_dir, "Registry1")
         status = create_and_populate_registry(registry1_path, "Registry1",
                                               "7e1d4fce-5fe6-405e-8bac-078d4138e9a2",
                                               "Example1")

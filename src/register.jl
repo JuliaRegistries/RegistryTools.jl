@@ -1,53 +1,3 @@
-"""
-Given a remote repo URL and a git tree spec, get a `Project` object
-for the project file in that tree and a hash string for the tree.
-"""
-# function get_project(remote_url::AbstractString, tree_spec::AbstractString)
-#     # TODO?: use raw file downloads for GitHub/GitLab
-#     mktempdir(mkpath("packages")) do tmp
-#         # bare clone the package repo
-#         @debug("bare clone the package repo")
-#         repo = LibGit2.clone(remote_url, joinpath(tmp, "repo"), isbare=true)
-#         tree = try
-#             LibGit2.GitObject(repo, tree_spec)
-#         catch err
-#             err isa LibGit2.GitError && err.code == LibGit2.Error.ENOTFOUND || rethrow(err)
-#             error("$remote_url: git object $(repr(tree_spec)) could not be found")
-#         end
-#         tree isa LibGit2.GitTree || (tree = LibGit2.peel(LibGit2.GitTree, tree))
-#
-#         # check out the requested tree
-#         @debug("check out the requested tree")
-#         tree_path = abspath(tmp, "tree")
-#         GC.@preserve tree_path begin
-#             opts = LibGit2.CheckoutOptions(
-#                 checkout_strategy = LibGit2.Consts.CHECKOUT_FORCE,
-#                 target_directory = Base.unsafe_convert(Cstring, tree_path)
-#             )
-#             LibGit2.checkout_tree(repo, tree, options=opts)
-#         end
-#
-#         # look for a project file in the tree
-#         @debug("look for a project file in the tree")
-#         project_file = Pkg.Types.projectfile_path(tree_path)
-#         project_file !== nothing && isfile(project_file) ||
-#             error("$remote_url: git tree $(repr(tree_spec)) has no project file")
-#
-#         # parse the project file
-#         @debug("parse the project file")
-#         project = Pkg.Types.project_file
-#         project.name === nothing &&
-#             error("$remote_url $(repr(tree_spec)): package has no name")
-#         project.uuid === nothing &&
-#             error("$remote_url $(repr(tree_spec)): package has no UUID")
-#         project.version === nothing &&
-#             error("$remote_url $(repr(tree_spec)): package has no version")
-#
-#         return project, string(LibGit2.GitHash(tree))
-#     end
-# end
-
-
 # These can compromise the integrity of the registry and cannot be
 # opted out of.
 const mandatory_errors = [:version_exists,
@@ -598,7 +548,6 @@ function check_and_update_registry_files(pkg::Project, package_repo, tree_hash,
 
     # update package data: compat file
     @debug("check compat section")
-    regpaths = [registry_path; registry_deps_paths]
     check_compat!(pkg, regdata, status)
     haserror(status) && return
     update_compat_file(pkg, package_path, old_versions)
@@ -720,24 +669,6 @@ function register(
     end
     return set_metadata!(regbr, status)
 end
-
-# TODO: Move to Registrator.jl?
-struct RegisterParams
-    package_repo::String
-    pkg::Project
-    tree_sha::String
-    registry::String
-    registry_fork::String
-    registry_deps::Vector{<:String}
-    subdir::String
-    push::Bool
-    gitconfig::Dict
-end
-
-register(regp::RegisterParams) = register(regp.package_repo, regp.pkg, regp.tree_sha;
-                                          registry=regp.registry, registry_fork=regp.registry_fork,
-                                          registry_deps=regp.registry_deps,
-                                          subdir=regp.subdir, push=regp.push, gitconfig=regp.gitconfig,)
 
 """
     find_registered_version(pkg, registry_path)
