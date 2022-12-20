@@ -28,6 +28,30 @@ function get_registry_default_branch(git::Cmd)
     strip(split(lines[idx], ":")[2])
 end
 
+struct Project
+    name::Union{Nothing, String}
+    uuid::Union{Nothing, UUID}
+    version::Union{Nothing, VersionNumber}
+    deps::Dict{String, String}
+    weakdeps::Dict{String, String}
+    compat::Dict{String, String}
+    extras::Dict{String, String}
+end
+
+Project(project_file::String) = Project(isfile(project_file) ? TOML.parsefile(project_file) : Dict())
+function Project(d::Dict)
+    name = get(d, "name", nothing)
+    uuid = get(d, "uuid", nothing)
+    uuid !== nothing && (uuid = UUID(uuid))
+    version = get(d, "version", nothing)
+    version !== nothing && (version = VersionNumber(version))
+    deps = get(Dict, d, "deps")
+    weakdeps = get(Dict, d, "weakdeps")
+    compat = get(Dict, d, "compat")
+    extras = get(Dict, d, "extras")
+    Project(name, uuid, version, deps, weakdeps, compat, extras)
+end
+
 """
     RegEdit.get_registry(registry_url)
 
@@ -160,7 +184,7 @@ end
 
 # Not using `joinpath` here since we don't want backslashes in
 # Registry.toml when running on Windows.
-function package_relpath(pkg::Pkg.Types.Project)
+function package_relpath(pkg::Project)
     return package_relpath(pkg.name)
 end
 function package_relpath(pkg_name::AbstractString)
@@ -169,7 +193,7 @@ function package_relpath(pkg_name::AbstractString)
     return join(path_components, path_separator)
 end
 
-function Base.push!(reg::RegistryData, pkg::Pkg.Types.Project)
+function Base.push!(reg::RegistryData, pkg::Project)
     reg.packages[string(pkg.uuid)] = Dict(
         "name" => pkg.name, "path" => package_relpath(pkg)
     )

@@ -1,4 +1,5 @@
 using RegistryTools: DEFAULT_REGISTRY_URL,
+    Project,
     parse_registry,
     showsafe,
     registration_branch,
@@ -7,7 +8,6 @@ using RegistryTools: DEFAULT_REGISTRY_URL,
 using LibGit2
 import Pkg
 using Pkg.TOML
-using Pkg.Types: Project
 
 using Test
 
@@ -140,7 +140,6 @@ end
 
 @testset "check_version!" begin
     import RegistryTools: ReturnStatus, check_version!, haserror
-    import Pkg.Types: Project
     function hascheck(status::ReturnStatus, check)
         return check in (c.id for c in status.triggered_checks)
     end
@@ -276,7 +275,7 @@ end
 @testset "versions_file" begin
     import RegistryTools: get_versions_file, update_versions_file, check_versions!
     mktempdir(@__DIR__) do temp_dir
-        pkg = Project(version = v"1.0.0")
+        pkg = Project(Dict("version" => "1.0.0"))
         tree_hash = repeat("0", 40)
         status = ReturnStatus()
 
@@ -307,8 +306,8 @@ end
     import RegistryTools: update_deps_file
     mktempdir(@__DIR__) do temp_dir
         uuid = Base.UUID("8dfed614-e22c-5e08-85e1-65c5234f0b40")
-        deps = Dict("Test" => uuid)
-        pkg = Project(version = v"1.0.0", deps = deps)
+        deps = Dict("Test" => string(uuid))
+        pkg = Project(Dict("version" => "1.0.0", "deps" => deps))
         update_versions_file(pkg, joinpath(temp_dir, "Versions.toml"),
                              Dict{String, Any}(), repeat("0", 40))
         update_deps_file(pkg, temp_dir, VersionNumber[])
@@ -325,12 +324,7 @@ end
     import RegistryTools: update_compat_file
     mktempdir(@__DIR__) do temp_dir
         compat = Dict("julia" => "1.3")
-        if Base.VERSION >= v"1.7-"
-            compat2 = Dict((k, Pkg.Types.Compat(Pkg.Types.semver_spec(v), v)) for (k, v) in compat)
-            pkg = Project(version = v"1.0.0", compat = compat2)
-        else
-            pkg = Project(version = v"1.0.0", compat = compat)
-        end
+        pkg = Project(Dict("version" => "1.0.0", "compat" => compat))
         update_versions_file(pkg, joinpath(temp_dir, "Versions.toml"),
                              Dict{String, Any}(), repeat("0", 40))
         update_compat_file(pkg, temp_dir, VersionNumber[])
@@ -347,7 +341,6 @@ end
     import RegistryTools: RegistryData, ReturnStatus, haserror,
                           write_registry, check_and_update_registry_files,
                           RegBranch, set_metadata!
-    import Pkg.Types: read_project
     registry_update_tests =
         [
             # Add one simple package.
@@ -497,9 +490,7 @@ end
                           kind = "New package",
                           labels = String["new package"]))
 
-            # Compat for non-dependency. On Julia 1.2 and later this
-            # gives an error already in `read_project`, so only run it
-            # on Julia 1.1.
+            # Compat for non-dependency.
             (project_files = ["Example15"],
              skip_for_newer_julia = true,
              status = Symbol[:new_package, :new_package_label,
@@ -566,7 +557,7 @@ end
             # Register some packages.
             for project in test_data.project_files
                 project_file = joinpath(projects_path, "$(project).toml")
-                pkg = read_project(project_file)
+                pkg = Project(project_file)
                 # Create status object.
                 status = ReturnStatus()
                 regbr = RegBranch(pkg, "")
@@ -605,7 +596,7 @@ function create_and_populate_registry(registry_path, registry_name,
     # Add a package.
     projects_path = joinpath(@__DIR__, "project_files")
     project_file = joinpath(projects_path, "$(package).toml")
-    pkg = read_project(project_file)
+    pkg = Project(project_file)
     package_repo = "http://example.com/$(pkg.name).git"
     tree_hash = repeat("0", 40)
     registry_deps_paths = String[]
@@ -638,7 +629,7 @@ end
                                               "Example1")
         @test !haserror(status)
 
-        registry2_path = joinpath(temp_dir, "Registry2")
+        registry2_path = joinpath(@__DIR__, temp_dir, "Registry2")
         status = create_and_populate_registry(registry2_path, "Registry2",
                                               "a5a8be26-c942-4674-beee-533a0e81ac1d",
                                               "Dep1")
@@ -646,7 +637,7 @@ end
 
         projects_path = joinpath(@__DIR__, "project_files")
         project_file = joinpath(projects_path, "Example18.toml")
-        pkg = read_project(project_file)
+        pkg = Project(project_file)
         package_repo = "http://example.com/$(pkg.name).git"
         tree_hash = repeat("0", 40)
         registry_repo = "file://$(registry1_path)"
@@ -679,9 +670,8 @@ end
         # Add a package.
         projects_path = joinpath(@__DIR__, "project_files")
         project_file = joinpath(projects_path, "Example1.toml")
-        pkg = read_project(project_file)
+        pkg = Project(project_file)
         @test find_registered_version(pkg, registry_path) == ""
-
         package_repo = string("http://example.com/$(pkg.name).git")
         tree_hash = "7dd821daaae58ddf9fee53e00aa1aab33794d130"
         registry_deps_paths = String[]
@@ -692,13 +682,13 @@ end
 
         @test find_registered_version(pkg, registry_path) == tree_hash
         project_file = joinpath(projects_path, "Example2.toml")
-        pkg = read_project(project_file)
+        pkg = Project(project_file)
         @test find_registered_version(pkg, registry_path) == ""
     end
 end
 
 @testset "Sorted (recursive) TOML.print for Versions.toml file" begin
-    pkg = Project(version = v"2.0.0")
+    pkg = Project(Dict("version" => "2.0.0"))
     # versions_file = "Versions.toml"
     version_data = Dict{String,Any}(
          "1.0.0" => Dict("yanked"=>true,"git-tree-sha1"=>"b04b6c6bfd3a607aa1b85362b4854ef612137f3e"),
@@ -726,7 +716,6 @@ end
 
 @testset "subdirectory" begin
     import RegistryTools: ReturnStatus, check_and_update_registry_files
-    import Pkg.Types: read_project
 
     mktempdir(@__DIR__) do temp_dir
         registry_path = joinpath(temp_dir, "registry")
@@ -738,7 +727,7 @@ end
                               "d4e2f5cd-0f48-4704-9988-f1754e755b45")
         # Register a package without subdir (default).
         project_file = joinpath(projects_path, "Example1.toml")
-        pkg = read_project(project_file)
+        pkg = Project(project_file)
         status = ReturnStatus()
         package_repo = "http://example.com/Example1.git"
         check_and_update_registry_files(pkg, package_repo, tree_hash,
@@ -754,7 +743,7 @@ end
 
         # Register a package with subdir.
         project_file = joinpath(projects_path, "Dep1.toml")
-        pkg = read_project(project_file)
+        pkg = Project(project_file)
         status = ReturnStatus()
         package_repo = "http://example.com/BigRepo.git"
         check_and_update_registry_files(pkg, package_repo, tree_hash,
@@ -772,10 +761,8 @@ end
     end
 end
 
-if RegistryTools.PKG_HAS_WEAK
 @testset "weakdeps" begin
     import RegistryTools: ReturnStatus, check_and_update_registry_files
-    import Pkg.Types: read_project
 
     temp_dir = mktempdir(; cleanup=false)
     mktempdir(@__DIR__) do temp_dir
@@ -787,7 +774,7 @@ if RegistryTools.PKG_HAS_WEAK
         create_empty_registry(registry_path, "TestRegistry",
                               "d4e2f5cd-0f48-4704-9988-f1754e755b45")
         project_file = joinpath(projects_path, "Example19.toml")
-        pkg = read_project(project_file)
+        pkg = Project(project_file)
         status = ReturnStatus()
         package_repo = "http://example.com/Example1.git"
         check_and_update_registry_files(pkg, package_repo, tree_hash,
@@ -812,7 +799,6 @@ if RegistryTools.PKG_HAS_WEAK
             UUIDs = "cf7118a7-6976-5b1a-9a39-7adc72f591a4"
             """
     end
-end
 end
 
 @testset "The `RegistryTools.package_relpath` function" begin
