@@ -387,7 +387,14 @@ function update_deps_file(pkg::Project,
         end
 
         deps_data[pkg.version] = deps
-        if !isempty(deps_data) && !all(isempty, values(deps_data))
+        if file == "Deps.toml"
+            # We always write the `Deps.toml` file, even if it is empty
+            write_this_file = true
+        else
+            # We only write the `WeakDeps.toml` file if it is not empty
+            write_this_file = !isempty(deps_data) && !all(isempty, values(deps_data))
+        end
+        if write_this_file
             Compress.save(deps_file, deps_data)
         end
     end
@@ -491,7 +498,14 @@ function update_compat_file(pkg::Project,
         end
 
         compat_data[pkg.version] = d
-        if !isempty(compat_data) && !all(isempty, values(compat_data))
+        if file == "Compat.toml"
+            # We always write the `Compat.toml` file, even if it is empty
+            write_this_file = true
+        else
+            # We only write the `WeakCompat.toml` file if it is not empty
+            write_this_file = !isempty(compat_data) && !all(isempty, values(compat_data))
+        end
+        if write_this_file
             Compress.save(compat_file, compat_data)
         end
     end
