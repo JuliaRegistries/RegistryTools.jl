@@ -189,6 +189,7 @@ function package_relpath(pkg::Project)
 end
 function package_relpath(pkg_name::AbstractString)
     path_components = [uppercase(pkg_name[1]), pkg_name]
+    endswith(pkg_name, "_jll") && pushfirst!(path_components, "jll")  #JLLs have own top level folder
     path_separator = "/"
     return join(path_components, path_separator)
 end

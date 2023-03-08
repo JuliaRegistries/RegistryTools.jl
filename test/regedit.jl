@@ -803,6 +803,9 @@ end
 
 @testset "The `RegistryTools.package_relpath` function" begin
     @test RegistryTools.package_relpath("Example") == "E/Example"
+
+    # JLLs are in seperate top level directory
+    @test RegistryTools.package_relpath("Example_jll") == "jll/E/Example_jll"
 end
 
 end
