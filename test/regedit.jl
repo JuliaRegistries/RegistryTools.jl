@@ -764,7 +764,6 @@ end
 @testset "weakdeps" begin
     import RegistryTools: ReturnStatus, check_and_update_registry_files
 
-    temp_dir = mktempdir(; cleanup=false)
     mktempdir(@__DIR__) do temp_dir
         registry_path = joinpath(temp_dir, "registry")
         projects_path = joinpath(@__DIR__, "project_files")
