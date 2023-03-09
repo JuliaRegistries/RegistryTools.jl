@@ -5,6 +5,11 @@ on:
     branches: [master, "release-*"]
     tags: ["*"]
   pull_request:
+concurrency:
+  # Skip intermediate builds: all builds except for builds on the `master` or `release-*` branches
+  # Cancel intermediate builds: only pull request builds
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.ref != 'refs/heads/master' || startsWith(github.ref, 'refs/heads/release-') || github.run_number }}
+  cancel-in-progress: ${{ startsWith(github.ref, 'refs/pull/') }}
 jobs:
   test:
     name: Julia ${{ matrix.version }} - ${{ matrix.os }} - ${{ matrix.arch }}
@@ -13,7 +18,8 @@ jobs:
       fail-fast: false
       matrix:
         version:
-          - '1.6'
+          - '1.1' # oldest Julia supported by this package
+          - '1.6' # current LTS
           - '1' # automatically expands to the latest stable 1.x release of Julia
           - 'nightly'
         os:
