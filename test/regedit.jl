@@ -4,7 +4,8 @@ using RegistryTools: DEFAULT_REGISTRY_URL,
     showsafe,
     registration_branch,
     get_registry,
-    gitcmd
+    gitcmd,
+    same_apart_from_dotgit
 using LibGit2
 import Pkg
 using Pkg.TOML
@@ -42,6 +43,33 @@ end
         ))
         url = "https://julialang.org/"
         @test registration_branch(example; url=url) == "registrator-example-698ec630-v1.10.2-0251df46a9"
+    end
+
+    @testset "same_apart_from_dotgit" begin
+        @test same_apart_from_dotgit(
+            "https://github.com/JuliaLang/Example.jl",
+            "https://github.com/JuliaLang/Example.jl"
+        )
+
+        @test same_apart_from_dotgit(
+            "https://github.com/JuliaLang/Example.jl.git",
+            "https://github.com/JuliaLang/Example.jl"
+        )
+
+        @test same_apart_from_dotgit(
+            "https://github.com/JuliaLang/Example.jl",
+            "https://github.com/JuliaLang/Example.jl.git"
+        )
+
+        @test !same_apart_from_dotgit(
+            "https://github.com/JuliaLang/Example.jl",
+            "https://github.com/JuliaLang/Another.jl"
+        )
+
+        @test !same_apart_from_dotgit(
+            "https://github.com/JuliaLang/Example.jl.git",
+            "https://github.com/JuliaLang/Another.jl"
+        )
     end
 end
 

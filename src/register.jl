@@ -276,9 +276,10 @@ function check_package!(package_repo::AbstractString,
     # not been created yet.
     if isfile(package_file)
         repo = TOML.parsefile(package_file)["repo"]
+        @info("repo = $repo, package_repo = $package_repo")
         if isempty(package_repo)
             package_repo = repo
-        elseif repo != package_repo
+        elseif !same_apart_from_dotgit(repo, package_repo)
             err = :change_package_url
             @debug(err)
             add!(status, err)
