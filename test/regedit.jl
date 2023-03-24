@@ -5,7 +5,8 @@ using RegistryTools: DEFAULT_REGISTRY_URL,
     registration_branch,
     get_registry,
     gitcmd,
-    same_apart_from_dotgit
+    same_pkg_url,
+    same_pkg_path
 using LibGit2
 import Pkg
 using Pkg.TOML
@@ -45,30 +46,40 @@ end
         @test registration_branch(example; url=url) == "registrator-example-698ec630-v1.10.2-0251df46a9"
     end
 
-    @testset "same_apart_from_dotgit" begin
-        @test same_apart_from_dotgit(
+    @testset "same_pkg_url" begin
+        @test same_pkg_url(
             "https://github.com/JuliaLang/Example.jl",
             "https://github.com/JuliaLang/Example.jl"
         )
 
-        @test same_apart_from_dotgit(
+        @test same_pkg_url(
             "https://github.com/JuliaLang/Example.jl.git",
             "https://github.com/JuliaLang/Example.jl"
         )
 
-        @test same_apart_from_dotgit(
+        @test same_pkg_url(
             "https://github.com/JuliaLang/Example.jl",
             "https://github.com/JuliaLang/Example.jl.git"
         )
 
-        @test !same_apart_from_dotgit(
+        @test !same_pkg_url(
             "https://github.com/JuliaLang/Example.jl",
             "https://github.com/JuliaLang/Another.jl"
         )
 
-        @test !same_apart_from_dotgit(
+        @test !same_pkg_url(
             "https://github.com/JuliaLang/Example.jl.git",
             "https://github.com/JuliaLang/Another.jl"
+        )
+
+        @test same_pkg_url(
+            "https://github.com/JuliaLang/Example.jl",
+            "ssh://git@github.com/JuliaLang/Example.jl"
+        )
+
+        @test same_pkg_url(
+            "https://github.com/JuliaLang/Example.jl",
+            "ssh://git@github.com/JuliaLang/Example.jl.git"
         )
     end
 end

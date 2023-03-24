@@ -1,4 +1,5 @@
 import SHA
+import HTTP
 
 showsafe(x) = (x === nothing) ? "nothing" : x
 
@@ -24,15 +25,25 @@ end
 
 # Returns true if the two urls are the same. When the two urls are different
 # returns true if the only difference between the two urls is a .git at the end
-# . Returns false otherwise
-function same_apart_from_dotgit(urla, urlb)
-    if urla == urlb
+# or if only the scheme (http/https/ssh) is different. Returns false otherwise
+function same_pkg_url(urla::AbstractString, urlb::AbstractString)
+    same_pkg_url(HTTP.URI(string(urla)), HTTP.URI(string(urlb)))
+end
+
+function same_pkg_url(urla::HTTP.URI, urlb::HTTP.URI)
+    urla.host == urlb.host && same_pkg_path(urla.path, urlb.path)
+end
+
+function same_pkg_path(patha::AbstractString, pathb::AbstractString)
+    if patha == pathb
         return true
     end
 
-    if length(urla) > length(urlb)
-        return urla[end-3:end] == ".git" && urla[1:end-4] == urlb
-    else
-        return urlb[end-3:end] == ".git" && urlb[1:end-4] == urla
+    if endswith(patha, ".git")
+        return patha[1:end-4] == pathb
+    elseif endswith(pathb, ".git")
+        return pathb[1:end-4] == patha
     end
+
+    return false
 end

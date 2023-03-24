@@ -278,7 +278,7 @@ function check_package!(package_repo::AbstractString,
         repo = TOML.parsefile(package_file)["repo"]
         if isempty(package_repo)
             package_repo = repo
-        elseif !same_apart_from_dotgit(repo, package_repo)
+        elseif !same_pkg_url(repo, package_repo)
             err = :change_package_url
             @debug(err)
             add!(status, err)
