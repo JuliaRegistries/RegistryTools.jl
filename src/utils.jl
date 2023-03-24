@@ -35,15 +35,5 @@ function same_pkg_url(urla::HTTP.URI, urlb::HTTP.URI)
 end
 
 function same_pkg_path(patha::AbstractString, pathb::AbstractString)
-    if patha == pathb
-        return true
-    end
-
-    if endswith(patha, ".git")
-        return patha[1:end-4] == pathb
-    elseif endswith(pathb, ".git")
-        return pathb[1:end-4] == patha
-    end
-
-    return false
+    patha == pathb || patha * ".git" == pathb || patha == pathb * ".git"
 end
