@@ -639,11 +639,7 @@ end
             projects_path = joinpath(@__DIR__, "project_files")
             project_file = joinpath(projects_path, "Example18.toml")
             pkg = pkg_f(project_file)
-            if pkg isa AbstractString
-                package_repo = "http://example.com/$(pkg).git"
-            else
-                package_repo = "http://example.com/$(pkg.name).git"
-            end
+            package_repo = "http://example.com/Example.git"
             tree_hash = repeat("0", 40)
             registry_repo = "file://$(registry1_path)"
             deps_repo = "file://$(registry2_path)"
