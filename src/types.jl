@@ -38,7 +38,7 @@ struct Project
     extras::Dict{String, String}
 end
 
-Project(project_file::String) = Project(isfile(project_file) ? TOML.parsefile(project_file) : Dict())
+Project(project_file::AbstractString) = Project(isfile(project_file) ? TOML.parsefile(project_file) : Dict())
 function Project(d::Dict)
     name = get(d, "name", nothing)
     uuid = get(d, "uuid", nothing)
