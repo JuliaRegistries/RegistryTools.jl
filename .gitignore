@@ -14,3 +14,5 @@ docs/Manifest.toml
 test/jl_*
 test/jl_*/
 test/registries/
+
+Manifest.toml
