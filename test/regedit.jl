@@ -622,41 +622,46 @@ end
 # version of one of the packages with a dependency to the other
 # package. The registration is pushed to a new branch via a file URL.
 @testset "register" begin
-    mktempdir(@__DIR__) do temp_dir
-        registry1_path = joinpath(temp_dir, "Registry1")
-        status = create_and_populate_registry(registry1_path, "Registry1",
-                                              "7e1d4fce-5fe6-405e-8bac-078d4138e9a2",
-                                              "Example1")
-        @test !haserror(status)
+    for pkg_f in [identity, Project]
+        mktempdir(@__DIR__) do temp_dir
+            registry1_path = joinpath(temp_dir, "Registry1")
+            status = create_and_populate_registry(registry1_path, "Registry1",
+                                                  "7e1d4fce-5fe6-405e-8bac-078d4138e9a2",
+                                                  "Example1")
+            @test !haserror(status)
 
-        registry2_path = joinpath(@__DIR__, temp_dir, "Registry2")
-        status = create_and_populate_registry(registry2_path, "Registry2",
-                                              "a5a8be26-c942-4674-beee-533a0e81ac1d",
-                                              "Dep1")
-        @test !haserror(status)
+            registry2_path = joinpath(@__DIR__, temp_dir, "Registry2")
+            status = create_and_populate_registry(registry2_path, "Registry2",
+                                                  "a5a8be26-c942-4674-beee-533a0e81ac1d",
+                                                  "Dep1")
+            @test !haserror(status)
 
-        projects_path = joinpath(@__DIR__, "project_files")
-        project_file = joinpath(projects_path, "Example18.toml")
-        pkg = Project(project_file)
-        package_repo = "http://example.com/$(pkg.name).git"
-        tree_hash = repeat("0", 40)
-        registry_repo = "file://$(registry1_path)"
-        deps_repo = "file://$(registry2_path)"
-        regbr = register(package_repo, pkg, tree_hash, registry = registry_repo,
-                         registry_deps = [deps_repo], push = true,
-                         gitconfig = TEST_GITCONFIG)
-        @test !haskey(regbr.metadata, "error") && !haskey(regbr.metadata, "warning")
-        git = gitcmd(registry1_path, TEST_GITCONFIG)
-        branches = readlines(`$git branch`)
-        @test length(branches) == 2
+            projects_path = joinpath(@__DIR__, "project_files")
+            project_file = joinpath(projects_path, "Example18.toml")
+            pkg = pkg_f(project_file)
+            package_repo = "http://example.com/Example.git"
+            tree_hash = repeat("0", 40)
+            registry_repo = "file://$(registry1_path)"
+            deps_repo = "file://$(registry2_path)"
+            regbr = register(package_repo, pkg, tree_hash, registry = registry_repo,
+                             registry_deps = [deps_repo], push = true,
+                             gitconfig = TEST_GITCONFIG)
+            if haskey(regbr.metadata, "error") || haskey(regbr.metadata, "warning")
+                @info "" get(regbr.metadata, "error", nothing) get(regbr.metadata, "warning", nothing)
+            end
+            @test !haskey(regbr.metadata, "error") && !haskey(regbr.metadata, "warning")
+            git = gitcmd(registry1_path, TEST_GITCONFIG)
+            branches = readlines(`$git branch`)
+            @test length(branches) == 2
+        end
+
+        # Clean up the registry cache created by `register`.
+        rm(joinpath(@__DIR__, "registries", "7e1d4fce-5fe6-405e-8bac-078d4138e9a2"),
+           recursive = true)
+        rm(joinpath(@__DIR__, "registries", "a5a8be26-c942-4674-beee-533a0e81ac1d"),
+           recursive = true)
+        rm(joinpath(@__DIR__, "registries"))
     end
-
-    # Clean up the registry cache created by `register`.
-    rm(joinpath(@__DIR__, "registries", "7e1d4fce-5fe6-405e-8bac-078d4138e9a2"),
-       recursive = true)
-    rm(joinpath(@__DIR__, "registries", "a5a8be26-c942-4674-beee-533a0e81ac1d"),
-       recursive = true)
-    rm(joinpath(@__DIR__, "registries"))
 end
 
 @testset "find_registered_version" begin
