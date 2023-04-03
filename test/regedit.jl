@@ -650,6 +650,9 @@ end
             regbr = register(package_repo, pkg, tree_hash, registry = registry_repo,
                              registry_deps = [deps_repo], push = true,
                              gitconfig = TEST_GITCONFIG)
+            if haskey(regbr.metadata, "error") || haskey(regbr.metadata, "warning")
+                @info "" get(regbr.metadata, "error", nothing) get(regbr.metadata, "warning", nothing)
+            end
             @test !haskey(regbr.metadata, "error") && !haskey(regbr.metadata, "warning")
             git = gitcmd(registry1_path, TEST_GITCONFIG)
             branches = readlines(`$git branch`)
