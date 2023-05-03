@@ -69,12 +69,13 @@ function get_registry(
 
         if !ispath(registry_path)
             mkpath(path(cache))
-            run(`git clone $registry_url $registry_path`)
+            run(`git clone -q --depth=1 $registry_url $registry_path`)
         else
             # this is really annoying/impossible to do with LibGit2
             git = gitcmd(registry_path, gitconfig)
             run(`$git config remote.origin.url $registry_url`)
             registry_defbranch = get_registry_default_branch(git)
+            run(`$git clean -fd`)
             run(`$git checkout -q -f $registry_defbranch`)
             # uses config because git versions <2.17.0 did not have the -P option
             run(`$git -c fetch.pruneTags fetch -q origin $registry_defbranch`)
@@ -85,7 +86,7 @@ function get_registry(
     else
         registry_temp = mktempdir(mkpath(path(cache)))
         try
-            run(`git clone $registry_url $registry_temp`)
+            run(`git clone -q --depth=1 $registry_url $registry_temp`)
             reg = parse_registry(joinpath(registry_temp, "Registry.toml"))
             registry_uuid = cache.registries[registry_url] = reg.uuid
             registry_path = path(cache, registry_uuid)
