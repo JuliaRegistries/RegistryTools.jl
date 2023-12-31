@@ -304,10 +304,10 @@ end
         @test data isa Dict
         @test collect(keys(data)) == ["1.0.0"]
         @test data["1.0.0"] isa Dict
-        @test sort!(collect(keys(data["1.0.0"]))) == ["git-commit-sha1", "git-tree-path", "git-tree-sha1"]
+        @test sort!(collect(keys(data["1.0.0"]))) == ["git-commit-sha1", "git-tree-sha1", "subdir"]
         @test data["1.0.0"]["git-tree-sha1"] == tree_hash
         @test data["1.0.0"]["git-commit-sha1"] == commit_hash
-        @test data["1.0.0"]["git-tree-path"] == subdir
+        @test data["1.0.0"]["subdir"] == subdir
 
         check_versions!(pkg, data, status)
         # This version was just registered, should be a complaint now.

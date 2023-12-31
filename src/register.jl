@@ -343,7 +343,7 @@ function update_versions_file(pkg::Project,
         version_info["git-tag-name"] = tag_name
     end
     if subdir != ""
-        version_info["git-tree-path"] = subdir
+        version_info["subdir"] = subdir
     end
     versions_data[string(pkg.version)] = version_info
 
@@ -364,7 +364,7 @@ function update_versions_file(pkg::Project,
                     return 3
                 elseif x == "git-tag-name"
                     return 4
-                elseif x == "git-tree-path"
+                elseif x == "subdir"
                     return 5
                 elseif x == "yanked"
                     return 100
