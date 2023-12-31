@@ -50,7 +50,7 @@ end
         mktempdir(@__DIR__) do temp_cache_dir
             # test when registry is not in the cache and not downloaded
             cache = RegistryTools.RegistryCache(temp_cache_dir)
-            with(get_registry(DEFAULT_REGISTRY_URL, cache=cache, gitconfig=TEST_GITCONFIG)) do repo
+            LibGit2.with(get_registry(DEFAULT_REGISTRY_URL, cache=cache, gitconfig=TEST_GITCONFIG)) do repo
                 @test LibGit2.path(repo) == replace(RegistryTools.path(cache, DEFAULT_REGISTRY_URL), '\\'=>'/')
                 @test LibGit2.branch(repo) == "master"
                 @test !LibGit2.isdirty(repo)
@@ -61,7 +61,7 @@ end
             registry_path = RegistryTools.path(cache, DEFAULT_REGISTRY_URL)
             rm(registry_path, recursive=true, force=true)
             @test !ispath(registry_path)
-            with(get_registry(DEFAULT_REGISTRY_URL, cache=cache, gitconfig=TEST_GITCONFIG)) do repo
+            LibGit2.with(get_registry(DEFAULT_REGISTRY_URL, cache=cache, gitconfig=TEST_GITCONFIG)) do repo
                 @test LibGit2.path(repo) == replace(RegistryTools.path(cache, DEFAULT_REGISTRY_URL), '\\'=>'/')
                 @test LibGit2.branch(repo) == "master"
                 @test !LibGit2.isdirty(repo)
@@ -80,7 +80,7 @@ end
                 @test LibGit2.GitObject(repo, "HEAD") != LibGit2.GitObject(repo, "master")
                 @test ispath(registry_path)
             end
-            with(get_registry(DEFAULT_REGISTRY_URL, cache=cache, gitconfig=TEST_GITCONFIG)) do repo
+            LibGit2.with(get_registry(DEFAULT_REGISTRY_URL, cache=cache, gitconfig=TEST_GITCONFIG)) do repo
                 @test LibGit2.path(repo) == replace(RegistryTools.path(cache, DEFAULT_REGISTRY_URL), '\\'=>'/')
                 @test LibGit2.branch(repo) == "master"
                 @test !LibGit2.isdirty(repo)
