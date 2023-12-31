@@ -574,7 +574,8 @@ function check_and_update_registry_files(pkg::Project, package_repo, tree_hash,
     versions_file, versions_data = get_versions_file(package_path)
     old_versions = check_versions!(pkg, versions_data, status)
     haserror(status) && return
-    update_versions_file(pkg, versions_file, versions_data, tree_hash; commit_hash, tag_hash, tag_name, subdir)
+    update_versions_file(pkg, versions_file, versions_data, tree_hash; 
+        commit_hash = commit_hash, tag_hash = tag_hash, tag_name = tag_name, subdir = subdir)
 
     # update package data: deps file
     @debug("update package data: deps file")
@@ -676,7 +677,7 @@ function register(
         check_and_update_registry_files(pkg, package_repo, tree_hash,
                                         registry_path, registry_deps_paths,
                                         status;
-                                        commit_hash, tag_hash, tag_name, subdir)
+                                        commit_hash=commit_hash, tag_hash=tag_hash, tag_name=tag_name, subdir=subdir)
         haserror(status) && return set_metadata!(regbr, status)
 
         regtreesha = get_registrator_tree_sha()
