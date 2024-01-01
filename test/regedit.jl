@@ -298,7 +298,7 @@ end
 
         commit_hash = repeat("1", 40)
         subdir = "sub/dir"
-        update_versions_file(pkg, filename, data, tree_hash; commit_hash, subdir)
+        update_versions_file(pkg, filename, data, tree_hash; commit_hash=commit_hash, subdir=subdir)
 
         _, data = get_versions_file(temp_dir)
         @test data isa Dict
