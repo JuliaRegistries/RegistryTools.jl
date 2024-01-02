@@ -328,16 +328,12 @@ function update_versions_file(pkg::Project,
                               versions_data::Dict{String, Any},
                               tree_hash::AbstractString;
                               commit_hash::Union{AbstractString,Nothing}=nothing,
-                              tag_hash::Union{AbstractString,Nothing}=nothing,
                               tag_name::Union{AbstractString,Nothing}=nothing,
                               subdir::AbstractString="",
                               )
     version_info = Dict{String, Any}("git-tree-sha1" => string(tree_hash))
     if !isnothing(commit_hash)
         version_info["git-commit-sha1"] = commit_hash
-    end
-    if !isnothing(tag_hash)
-        version_info["git-tag-sha1"] = tag_hash
     end
     if !isnothing(tag_name)
         version_info["git-tag-name"] = tag_name
@@ -360,12 +356,10 @@ function update_versions_file(pkg::Project,
                     return 1
                 elseif x == "git-commit-sha1"
                     return 2
-                elseif x == "git-tag-sha1"
-                    return 3
                 elseif x == "git-tag-name"
-                    return 4
+                    return 3
                 elseif x == "subdir"
-                    return 5
+                    return 4
                 elseif x == "yanked"
                     return 100
                 else
@@ -554,7 +548,7 @@ end
 function check_and_update_registry_files(pkg::Project, package_repo, tree_hash,
                                          registry_path, registry_deps_paths,
                                          status;
-                                         commit_hash = nothing, tag_hash = nothing, tag_name = nothing, subdir = "")
+                                         commit_hash = nothing, tag_name = nothing, subdir = "")
     # find package in registry
     @debug("find package in registry")
     registry_file = joinpath(registry_path, "Registry.toml")
@@ -575,7 +569,7 @@ function check_and_update_registry_files(pkg::Project, package_repo, tree_hash,
     old_versions = check_versions!(pkg, versions_data, status)
     haserror(status) && return
     update_versions_file(pkg, versions_file, versions_data, tree_hash; 
-        commit_hash = commit_hash, tag_hash = tag_hash, tag_name = tag_name, subdir = subdir)
+        commit_hash = commit_hash, tag_name = tag_name, subdir = subdir)
 
     # update package data: deps file
     @debug("update package data: deps file")
@@ -614,7 +608,6 @@ errors or warnings that occurred.
 * `registry_deps::Vector{String}=[]`: the git repository URLs for any registries containing
     packages depended on by `pkg`
 * `commit_hash::Union{AbstractString, Nothing}`: commit hash of the package revision (optional)
-* `tag_hash::Union{AbstractString, Nothing}`: tag hash of the package revision (optional)
 * `tag_name::Union{AbstractString, Nothing}`: tag name of the package revision (optional)
 * `subdir::AbstractString=""`: path to package tree within `package_repo`
 * `push::Bool=false`: whether to push a registration branch to `registry` for consideration
@@ -626,7 +619,6 @@ function register(
     registry_fork::AbstractString = registry,
     registry_deps::Vector{<:AbstractString} = AbstractString[],
     commit_hash::Union{AbstractString,Nothing} = nothing,
-    tag_hash::Union{AbstractString,Nothing} = nothing,
     tag_name::Union{AbstractString,Nothing} = nothing,
     subdir::AbstractString = "",
     checks_triggering_error = registrator_errors,
@@ -677,7 +669,7 @@ function register(
         check_and_update_registry_files(pkg, package_repo, tree_hash,
                                         registry_path, registry_deps_paths,
                                         status;
-                                        commit_hash=commit_hash, tag_hash=tag_hash, tag_name=tag_name, subdir=subdir)
+                                        commit_hash=commit_hash, tag_name=tag_name, subdir=subdir)
         haserror(status) && return set_metadata!(regbr, status)
 
         regtreesha = get_registrator_tree_sha()
