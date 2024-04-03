@@ -34,6 +34,7 @@ struct Project
     name::Union{Nothing, String}
     uuid::Union{Nothing, UUID}
     version::Union{Nothing, VersionNumber}
+    path::Union{Nothing, String}
     deps::Dict{String, String}
     weakdeps::Dict{String, String}
     compat::Dict{String, String}
@@ -47,11 +48,12 @@ function Project(d::Dict)
     uuid !== nothing && (uuid = UUID(uuid))
     version = get(d, "version", nothing)
     version !== nothing && (version = VersionNumber(version))
+    path = get(d, "path", nothing)
     deps = get(Dict, d, "deps")
     weakdeps = get(Dict, d, "weakdeps")
     compat = get(Dict, d, "compat")
     extras = get(Dict, d, "extras")
-    Project(name, uuid, version, deps, weakdeps, compat, extras)
+    Project(name, uuid, version, path, deps, weakdeps, compat, extras)
 end
 
 """
