@@ -102,7 +102,7 @@ function get_registry(
     return LibGit2.GitRepo(registry_path)
 end
 
-@auto_hash_equals struct RegistryData
+struct RegistryData
     name::String
     uuid::UUID
     repo::Union{String, Nothing}

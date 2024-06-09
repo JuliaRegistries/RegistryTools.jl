@@ -122,7 +122,12 @@ end
         written_registry = sprint(TOML.print, registry_data)
         written_registry_data = parse_registry(IOBuffer(written_registry))
 
-        @test written_registry_data == registry_data
+        # Note: This used to be `written_registry_data ==
+        # registry_data` but it seemed a little silly to depend on
+        # AutoHashEquals for this test only.
+        for field in fieldnames(RegistryData)
+            @test getfield(written_registry_data, field) == getfield(registry_data, field)
+        end
         @test written_registry == registry
     end
 
