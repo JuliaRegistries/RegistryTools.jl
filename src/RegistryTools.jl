@@ -5,7 +5,6 @@ export register
 export check_and_update_registry_files
 export find_registered_version
 
-using AutoHashEquals
 using LibGit2
 using Pkg: Pkg, TOML, GitTools
 using UUIDs
