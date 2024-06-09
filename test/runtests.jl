@@ -1,5 +1,5 @@
-using RegistryTools
-using Test
+import RegistryTools
+using Test: @testset, @test
 
 @testset "RegistryTools" begin
 

@@ -4,10 +4,12 @@ using RegistryTools: DEFAULT_REGISTRY_URL,
     showsafe,
     registration_branch,
     get_registry,
-    gitcmd
-using LibGit2
-import Pkg
-using Pkg.TOML
+    gitcmd,
+    register,
+    find_registered_version,
+    RegistryData
+import LibGit2
+using Pkg: TOML
 
 using Test
 
