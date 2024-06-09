@@ -1,4 +1,4 @@
-using Pkg
+import Pkg
 using RegistryTools.Compress: compress_versions, load, compress
 
 @testset "compress_versions()" begin

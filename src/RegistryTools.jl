@@ -5,9 +5,9 @@ export register
 export check_and_update_registry_files
 export find_registered_version
 
-using LibGit2
+import LibGit2
 using Pkg: Pkg, TOML, GitTools
-using UUIDs
+using UUIDs: UUID
 
 const DEFAULT_REGISTRY_URL = "https://github.com/JuliaRegistries/General"
 
