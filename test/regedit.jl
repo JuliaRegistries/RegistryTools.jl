@@ -320,6 +320,12 @@ end
     end
 end
 
+# Adapts regression tests for compat files to the changes in
+# https://github.com/JuliaLang/Pkg.jl/pull/3580.
+function read_compat(filename)
+    return replace(read(filename, String), " - " => "-")
+end
+
 @testset "compat_file" begin
     import RegistryTools: update_compat_file
     mktempdir(@__DIR__) do temp_dir
@@ -330,10 +336,10 @@ end
         update_compat_file(pkg, temp_dir, VersionNumber[])
         compat_file = joinpath(temp_dir, "Compat.toml")
         @test isfile(compat_file)
-        @test read(compat_file, String) == """
-                                           [1]
-                                           julia = "1.3.0-1"
-                                           """
+        @test read_compat(compat_file) == """
+                                          [1]
+                                          julia = "1.3.0-1"
+                                          """
     end
 end
 
@@ -785,13 +791,13 @@ end
                                         registry_path,
                                         registry_deps_paths, status)
         path = RegistryTools.package_relpath("Example")
-        @test read(joinpath(registry_path, path, "Compat.toml"), String) ==
+        @test read_compat(joinpath(registry_path, path, "Compat.toml")) ==
             """
             [1]
             UUIDs = "1.8.0-1"
             julia = "1.1.0-1"
             """
-        @test read(joinpath(registry_path, path, "WeakCompat.toml"), String) ==
+        @test read_compat(joinpath(registry_path, path, "WeakCompat.toml")) ==
             """
             [1]
             UUIDs = "1.8.0-1"
