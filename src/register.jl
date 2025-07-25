@@ -383,7 +383,7 @@ function update_deps_file(pkg::Project,
         if isfile(deps_file)
             deps_data = Compress.load(deps_file, old_versions)
         else
-            deps_data = Dict()
+            deps_data = Dict{VersionNumber,Dict{String,Union{Base.UUID, VersionSpec}}}()
         end
 
         deps_data[pkg.version] = deps
@@ -472,10 +472,10 @@ function update_compat_file(pkg::Project,
         if isfile(compat_file)
             compat_data = Compress.load(compat_file, old_versions)
         else
-            compat_data = Dict()
+            compat_data = Dict{VersionNumber,Dict{String,Union{Base.UUID, VersionSpec}}}()
         end
 
-        d = Dict()
+        d = Dict{String,Union{Base.UUID, VersionSpec}}()
         for (name, version) in pkg.compat
             # Ignore julia compat for weak
             if file == "WeakCompat.toml" && name == "julia"
@@ -485,16 +485,8 @@ function update_compat_file(pkg::Project,
                 @debug("$name is a not in relevant dependency list; omitting from Compat.toml")
                 continue
             end
-
             spec = Pkg.Types.semver_spec(version)
-
-            # The call to `map(versionrange, )` can be removed
-            # once Pkg is updated to a version including
-            # https://github.com/JuliaLang/Pkg.jl/pull/1181
-            # and support for older versions is dropped.
-            ranges = map(r->versionrange(r.lower, r.upper), spec.ranges)
-            ranges = VersionSpec(ranges).ranges # this combines joinable ranges
-            d[name] = length(ranges) == 1 ? string(ranges[1]) : map(string, ranges)
+            d[name] = spec
         end
 
         compat_data[pkg.version] = d
