@@ -18,7 +18,6 @@ jobs:
       fail-fast: false
       matrix:
         version:
-          - '1.1' # oldest Julia supported by this package
           - '1.6' # current LTS
           - '1' # automatically expands to the latest stable 1.x release of Julia
           - 'nightly'
