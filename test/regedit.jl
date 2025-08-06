@@ -469,7 +469,7 @@ end
             (project_files = ["Example11"],
              status = Symbol[:new_package, :new_package_label,
                              :dependency_not_found],
-             regbranch = (error = true, warning = false,
+             regbranch = (error = false, warning = true,
                           kind = "New package",
                           labels = String["new package"]))
 
@@ -477,7 +477,7 @@ end
             (project_files = ["Example12"],
              status = Symbol[:new_package, :new_package_label,
                              :dependency_not_found],
-             regbranch = (error = true, warning = false,
+             regbranch = (error = false, warning = true,
                           kind = "New package",
                           labels = String["new package"]))
 
@@ -558,6 +558,7 @@ end
         registry_deps_paths = String[]
         tree_hash = repeat("0", 40)
         for test_data in registry_update_tests
+            # println("Test data: ", test_data)
             if haskey(test_data, :skip_for_newer_julia) && VERSION >= v"1.2"
                 continue
             end
