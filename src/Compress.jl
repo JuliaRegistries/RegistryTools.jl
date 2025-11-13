@@ -53,7 +53,7 @@ end
 function load(path::AbstractString,
               versions::Vector{VersionNumber} = load_versions(path))
     compressed = TOML.parsefile(path)
-    uncompressed = Dict{VersionNumber,Dict{String,Union{Base.UUID, VersionSpec}}}()
+    uncompressed = Dict{VersionNumber,Dict{Any,Any}}()
     for (vers, data) in compressed
         vs = VersionSpec(vers)
         for v in versions
@@ -63,12 +63,7 @@ function load(path::AbstractString,
                 if haskey(uv, key)
                     error("Overlapping ranges for $(key) in Compat. Detected for version $(v).")
                 else
-                    # The value can be either a UUID or a VersionSpec
-                    value_T = tryparse(Base.UUID, value)
-                    if value_T === nothing
-                        value_T = VersionSpec(value)
-                    end
-                    uv[key] = value_T
+                    uv[key] = value
                 end
             end
         end
@@ -76,30 +71,37 @@ function load(path::AbstractString,
     return uncompressed
 end
 
-function compress(path::AbstractString, uncompressed::Dict{VersionNumber,Dict{String,Union{Base.UUID, VersionSpec}}},
+function compress(path::AbstractString, uncompressed::Dict,
                   versions::Vector{VersionNumber} = load_versions(path))
-    inverted = Dict{Pair{String,Union{Base.UUID, VersionSpec}},Vector{VersionNumber}}()
+    inverted = Dict{Pair{String,Any},Vector{VersionNumber}}()
     for (ver, data) in uncompressed, (key, val) in data
+        val isa Base.UUID && (val = string(val))
         push!(get!(inverted, key => val, VersionNumber[]), ver)
     end
-    compressed = Dict{VersionRange,Dict{String,Union{Base.UUID, VersionSpec}}}()
+    compressed = Dict{String,Dict{String,Any}}()
     for ((k, v), vers) in inverted
         for r in compress_versions(versions, sort!(vers)).ranges
-            get!(Dict{String,Union{Base.UUID, VersionSpec}}, compressed, r)[k] = v
+            get!(compressed, string(r), Dict{String,Any}())[k] = v
         end
     end
     return compressed
 end
 
-function save(path::AbstractString, uncompressed::Dict{VersionNumber,Dict{String,Union{Base.UUID, VersionSpec}}},
+function save(path::AbstractString, uncompressed::Dict,
               versions::Vector{VersionNumber} = load_versions(path))
-    compressed = compress(path, uncompressed, versions)
-    compressed = Dict((string(k), v) for (k,v) in compressed)
+    compressed = compress(path, uncompressed)
     open(path, write=true) do io
-        TOML.print(string, io, compressed, sorted=true)
+        if STDLIB_TOML
+            TOML.print(string, io, compressed, sorted=true)
+        else
+            TOML.print(io, compressed, sorted=true)
+        end
     end
 end
 
+
+#=
+=#
 
 end # module
 
