@@ -154,9 +154,8 @@ end
     for ver in [v"0.0.2", v"0.3.2", v"4.3.2"]
         status = ReturnStatus()
         check_version!(ver, VersionNumber[], status)
-        @test hascheck(status, :not_standard_first_version)
         @test hascheck(status, :new_package_label)
-        @test length(status.triggered_checks) == 2
+        @test length(status.triggered_checks) == 1
         @test !haserror(status)
     end
 
@@ -407,15 +406,13 @@ end
 
             # Non-standard first version.
             (project_files = ["Example2"],
-             status = Symbol[:new_package, :new_package_label,
-                             :not_standard_first_version],
+             status = Symbol[:new_package, :new_package_label],
              regbranch = (error = false, warning = true,
                           kind = "New package", labels = String["new package"]))
 
             # Version zero.
             (project_files = ["Example5"],
-             status = Symbol[:new_package, :new_package_label, :version_zero,
-                             :not_standard_first_version],
+             status = Symbol[:new_package, :new_package_label, :version_zero],
              regbranch = (error = true, warning = true,
                           kind = "New package", labels = String["new package"]))
 
