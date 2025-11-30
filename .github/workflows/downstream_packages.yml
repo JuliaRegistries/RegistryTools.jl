@@ -31,6 +31,7 @@ jobs:
         package:
           - {user: JuliaRegistries, repo: Registrator.jl}
           - {user: JuliaRegistries, repo: RegistryCI.jl, subdir: RegistryCI}
+          - {user: GunnarFarneback, repo: LocalRegistry.jl}
     steps:
       - uses: actions/checkout@v6
         with:
