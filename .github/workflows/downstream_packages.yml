@@ -29,6 +29,7 @@ jobs:
         os:
           - ubuntu-latest
         package:
+          - {user: JuliaRegistries, repo: Registrator.jl}
     steps:
       - uses: actions/checkout@v6
         with:
