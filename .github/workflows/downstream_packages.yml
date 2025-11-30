@@ -30,6 +30,7 @@ jobs:
           - ubuntu-latest
         package:
           - {user: JuliaRegistries, repo: Registrator.jl}
+          - {user: JuliaRegistries, repo: RegistryCI.jl, subdir: RegistryCI}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -48,6 +49,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ (matrix.package.repo == 'Registrator.jl') && secrets.GITHUB_TOKEN || '' }}
           PACKAGE_SUBDIR: ${{ matrix.package.subdir }}
+          JULIA_PKG_UNPACK_REGISTRY: ${{ matrix.package.repo == 'RegistryCI.jl' }} # RegistryCI needs an unpacked registry
         run: |
           import Pkg
           using Pkg: PackageSpec
