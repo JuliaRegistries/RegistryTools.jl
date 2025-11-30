@@ -55,11 +55,7 @@ jobs:
           using Pkg: PackageSpec
           const subdir = strip(ENV["PACKAGE_SUBDIR"])
           @info "" subdir
-          if isempty(subdir)
-            Pkg.activate("downstream")
-          else
-            Pkg.activate("downstream/$subdir")
-          end
+          Pkg.activate("downstream/$subdir")
           @info "" Base.active_project()
           try
             # force it to use this PR's version of the package
