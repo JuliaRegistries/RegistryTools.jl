@@ -81,7 +81,12 @@ function compress(path::AbstractString, uncompressed::Dict,
     compressed = Dict{String,Dict{String,Any}}()
     for ((k, v), vers) in inverted
         for r in compress_versions(versions, sort!(vers)).ranges
-            get!(compressed, string(r), Dict{String,Any}())[k] = v
+            # Existing version ranges in `Compat.toml` files are stored without spaces.
+            # New version ranges are added with spaces in their string representation.
+            # Remove all spaces, so that equal version ranges compare equal as strings.
+            # This is a temporary work-around that will become unnecessary when
+            # "all this is rewirtten to use VersionNumbers", as suggested above.
+            get!(compressed, replace(string(r), " " => ""), Dict{String,Any}())[k] = v
         end
     end
     return compressed
