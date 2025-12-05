@@ -1,0 +1,76 @@
+# This is largely copied from:
+# https://github.com/SciML/ModelingToolkit.jl/blob/master/.github/workflows/Downstream.yml
+# License: MIT
+
+name: Downstream
+
+on:
+  push:
+    branches:
+      - master
+      - release-*
+    tags: ["*"]
+  pull_request:
+
+concurrency:
+  # Skip intermediate builds: all builds except for builds on the `master` or `release-*` branches
+  # Cancel intermediate builds: only pull request builds
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.ref != 'refs/heads/master' || startsWith(github.ref, 'refs/heads/release-') || github.run_number }}
+  cancel-in-progress: ${{ startsWith(github.ref, 'refs/pull/') }}
+
+permissions:
+  contents: read
+
+jobs:
+  downstream:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        julia-version:
+          - 'lts'
+          - '1'
+        os:
+          - ubuntu-latest
+        package:
+          - {user: JuliaRegistries, repo: Registrator.jl}
+          - {user: JuliaRegistries, repo: RegistryCI.jl, subdir: RegistryCI}
+          - {user: GunnarFarneback, repo: LocalRegistry.jl}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: ${{ matrix.julia-version }}
+      - name: Clone Downstream
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ matrix.package.user }}/${{ matrix.package.repo }}
+          path: downstream
+      - name: Load this and run the downstream tests
+        shell: julia --color=yes {0}
+        env:
+          GITHUB_TOKEN: ${{ (matrix.package.repo == 'Registrator.jl') && secrets.GITHUB_TOKEN || '' }}
+          PACKAGE_SUBDIR: ${{ matrix.package.subdir }}
+          JULIA_PKG_UNPACK_REGISTRY: ${{ matrix.package.repo == 'RegistryCI.jl' }} # RegistryCI needs an unpacked registry
+        run: |
+          import Pkg
+          using Pkg: PackageSpec
+          const subdir = strip(ENV["PACKAGE_SUBDIR"])
+          @info "" subdir
+          Pkg.activate("downstream/$subdir")
+          @info "" Base.active_project()
+          try
+            # force it to use this PR's version of the package
+            Pkg.develop(PackageSpec(path="."))  # resolver may fail with main deps
+            Pkg.update()
+            Pkg.test()  # resolver may fail with test time deps
+          catch err
+            err isa Pkg.Resolve.ResolverError || rethrow()
+            # If we can't resolve that means this is incompatible by SemVer and this is fine
+            # It means we marked this as a breaking change, so we don't need to worry about
+            # Mistakenly introducing a breaking change, as we have intentionally made one
+            @info "Not compatible with this release. No problem." exception=err
+            exit(0)  # Exit immediately, as a success
+          end
