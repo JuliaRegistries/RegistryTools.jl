@@ -76,16 +76,20 @@ function compress(path::AbstractString, uncompressed::Dict,
     inverted = Dict{Pair{String,Any},Vector{VersionNumber}}()
     for (ver, data) in uncompressed, (key, val) in data
         val isa Base.UUID && (val = string(val))
+        # Existing version ranges in `Compat.toml` files are stored without spaces.
+        # New version ranges are added with spaces in their string representation.
+        # Remove all spaces, so that equal version ranges compare equal as strings.
+        # This is a temporary work-around that will become unnecessary when
+        # "all this is rewritten to use VersionNumbers", as suggested above.
+        #
+        # The source of the spaces is https://github.com/JuliaLang/Pkg.jl/pull/3580.
+        val = replace(string(val), " " => "")
         push!(get!(inverted, key => val, VersionNumber[]), ver)
     end
     compressed = Dict{String,Dict{String,Any}}()
     for ((k, v), vers) in inverted
         for r in compress_versions(versions, sort!(vers)).ranges
-            # Existing version ranges in `Compat.toml` files are stored without spaces.
-            # New version ranges are added with spaces in their string representation.
-            # Remove all spaces, so that equal version ranges compare equal as strings.
-            # This is a temporary work-around that will become unnecessary when
-            # "all this is rewirtten to use VersionNumbers", as suggested above.
+            # Remove the version range spaces also in the keys.
             get!(compressed, replace(string(r), " " => ""), Dict{String,Any}())[k] = v
         end
     end
