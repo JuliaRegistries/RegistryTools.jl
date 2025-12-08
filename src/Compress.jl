@@ -76,16 +76,27 @@ function compress(path::AbstractString, uncompressed::Dict,
     inverted = Dict{Pair{String,Any},Vector{VersionNumber}}()
     for (ver, data) in uncompressed, (key, val) in data
         val isa Base.UUID && (val = string(val))
-        push!(get!(inverted, key => val, VersionNumber[]), ver)
+        push!(get!(inverted, key => unspace_hyphen(val), VersionNumber[]), ver)
     end
     compressed = Dict{String,Dict{String,Any}}()
     for ((k, v), vers) in inverted
         for r in compress_versions(versions, sort!(vers)).ranges
-            get!(compressed, string(r), Dict{String,Any}())[k] = v
+            get!(compressed, unspace_hyphen(string(r)), Dict{String, Any}())[k] = v
         end
     end
     return compressed
 end
+
+# Existing version ranges in `Compat.toml` files are stored without spaces
+# around hyphens. New version ranges are added with spaces in their string
+# representation. Remove all spaces, so that equal version ranges compare
+# equal as strings. This is a temporary work-around that will become
+# unnecessary when "all this is rewritten to use VersionNumbers", as
+# suggested above.
+#
+# The source of the spaces is https://github.com/JuliaLang/Pkg.jl/pull/3580.
+unspace_hyphen(x::AbstractString) = replace(x, " - " => "-")
+unspace_hyphen(x::AbstractVector) = unspace_hyphen.(x)
 
 function save(path::AbstractString, uncompressed::Dict,
               versions::Vector{VersionNumber} = load_versions(path))
