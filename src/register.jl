@@ -77,7 +77,7 @@ function set_metadata!(regbr::RegBranch, status::ReturnStatus)
         elseif check == :not_standard_first_version
             regbr.metadata[complaint] =
                 """This looks like a new registration that registers version $(data.version).
-                Ideally, you should register an initial release with 0.0.1, 0.1.0 or 1.0.0 version numbers"""
+                Ideally, you should register an initial release with a 0.1.0 or 1.0.0 version number"""
         elseif check == :version_less_than_all_existing
             regbr.metadata[complaint] = "Version $(data.version) less than least existing version $(data.least)"
         elseif check == :version_exists
