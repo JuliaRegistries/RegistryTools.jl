@@ -303,6 +303,19 @@ end
         @test collect(keys(data["1.0.0"])) == ["git-tree-sha1"]
         @test data["1.0.0"]["git-tree-sha1"] == tree_hash
 
+        commit_hash = repeat("1", 40)
+        subdir = "sub/dir"
+        update_versions_file(pkg, filename, data, tree_hash; commit_hash=commit_hash, subdir=subdir)
+
+        _, data = get_versions_file(temp_dir)
+        @test data isa Dict
+        @test collect(keys(data)) == ["1.0.0"]
+        @test data["1.0.0"] isa Dict
+        @test sort!(collect(keys(data["1.0.0"]))) == ["git-commit-sha1", "git-tree-sha1", "subdir"]
+        @test data["1.0.0"]["git-tree-sha1"] == tree_hash
+        @test data["1.0.0"]["git-commit-sha1"] == commit_hash
+        @test data["1.0.0"]["subdir"] == subdir
+
         check_versions!(pkg, data, status)
         # This version was just registered, should be a complaint now.
         @test haserror(status)

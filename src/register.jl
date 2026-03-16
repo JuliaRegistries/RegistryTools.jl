@@ -326,8 +326,21 @@ end
 function update_versions_file(pkg::Project,
                               versions_file::AbstractString,
                               versions_data::Dict{String, Any},
-                              tree_hash::AbstractString)
+                              tree_hash::AbstractString;
+                              commit_hash::Union{AbstractString,Nothing}=nothing,
+                              tag_name::Union{AbstractString,Nothing}=nothing,
+                              subdir::AbstractString="",
+                              )
     version_info = Dict{String, Any}("git-tree-sha1" => string(tree_hash))
+    if !isnothing(commit_hash)
+        version_info["git-commit-sha1"] = commit_hash
+    end
+    if !isnothing(tag_name)
+        version_info["git-tag-name"] = tag_name
+    end
+    if subdir != ""
+        version_info["subdir"] = subdir
+    end
     versions_data[string(pkg.version)] = version_info
 
     open(versions_file, "w") do io
@@ -341,10 +354,16 @@ function update_versions_file(pkg::Project,
             else
                 if x == "git-tree-sha1"
                     return 1
-                elseif x == "yanked"
+                elseif x == "git-commit-sha1"
                     return 2
-                else
+                elseif x == "git-tag-name"
                     return 3
+                elseif x == "subdir"
+                    return 4
+                elseif x == "yanked"
+                    return 100
+                else
+                    return 200
                 end
             end
         end
@@ -528,7 +547,8 @@ end
 
 function check_and_update_registry_files(pkg::Project, package_repo, tree_hash,
                                          registry_path, registry_deps_paths,
-                                         status; subdir = "")
+                                         status;
+                                         commit_hash = nothing, tag_name = nothing, subdir = "")
     # find package in registry
     @debug("find package in registry")
     registry_file = joinpath(registry_path, "Registry.toml")
@@ -548,7 +568,8 @@ function check_and_update_registry_files(pkg::Project, package_repo, tree_hash,
     versions_file, versions_data = get_versions_file(package_path)
     old_versions = check_versions!(pkg, versions_data, status)
     haserror(status) && return
-    update_versions_file(pkg, versions_file, versions_data, tree_hash)
+    update_versions_file(pkg, versions_file, versions_data, tree_hash; 
+        commit_hash = commit_hash, tag_name = tag_name, subdir = subdir)
 
     # update package data: deps file
     @debug("update package data: deps file")
@@ -586,7 +607,9 @@ errors or warnings that occurred.
 * `registry_fork::AbstractString=registry: the git repository URL for a fork of the registry
 * `registry_deps::Vector{String}=[]`: the git repository URLs for any registries containing
     packages depended on by `pkg`
-* `subdir::AbstractString=""`: path to package within `package_repo`
+* `commit_hash::Union{AbstractString, Nothing}`: commit hash of the package revision (optional)
+* `tag_name::Union{AbstractString, Nothing}`: tag name of the package revision (optional)
+* `subdir::AbstractString=""`: path to package tree within `package_repo`
 * `push::Bool=false`: whether to push a registration branch to `registry` for consideration
 * `gitconfig::Dict=Dict()`: dictionary of configuration options for the `git` command
 """
@@ -595,6 +618,8 @@ function register(
     registry::AbstractString = DEFAULT_REGISTRY_URL,
     registry_fork::AbstractString = registry,
     registry_deps::Vector{<:AbstractString} = AbstractString[],
+    commit_hash::Union{AbstractString,Nothing} = nothing,
+    tag_name::Union{AbstractString,Nothing} = nothing,
     subdir::AbstractString = "",
     checks_triggering_error = registrator_errors,
     push::Bool = false,
@@ -643,7 +668,8 @@ function register(
 
         check_and_update_registry_files(pkg, package_repo, tree_hash,
                                         registry_path, registry_deps_paths,
-                                        status, subdir = subdir)
+                                        status;
+                                        commit_hash=commit_hash, tag_name=tag_name, subdir=subdir)
         haserror(status) && return set_metadata!(regbr, status)
 
         regtreesha = get_registrator_tree_sha()
