@@ -15,8 +15,8 @@ else
     #     @info "" s
     #     return SHA256(hex2bytes(s))
     # end
-    Base.string(hash::SHA256) = bytes2hex(hash.bytes)
-    Base.print(io::IO, hash::SHA256) = bytes2hex(io, hash.bytes)
+    Base.string(hash::SHA256) = bytes2hex(collect(hash.bytes))
+    Base.print(io::IO, hash::SHA256) = bytes2hex(io, collect(hash.bytes))
     Base.show(io::IO, hash::SHA256) = print(io, "SHA256(\"", hash, "\")")
 end
 
