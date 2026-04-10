@@ -1,3 +1,25 @@
+const SHA1 = Base.SHA1
+@static if isdefined(Base, :SHA256)
+    const SHA256 = Base.SHA256
+else
+    struct SHA256
+        bytes::NTuple{32, UInt8}
+    end
+    function SHA256(bytes::Vector{UInt8})
+        length(bytes) == 32 ||
+            throw(ArgumentError("wrong number of bytes for SHA256 hash: $(length(bytes))"))
+        return SHA256(ntuple(i->bytes[i], Val(32)))
+    end
+    SHA256(s::AbstractString) = SHA256(hex2bytes(s))
+    # function SHA256(s::AbstractString)
+    #     @info "" s
+    #     return SHA256(hex2bytes(s))
+    # end
+    Base.string(hash::SHA256) = bytes2hex(collect(hash.bytes))
+    Base.print(io::IO, hash::SHA256) = bytes2hex(io, collect(hash.bytes))
+    Base.show(io::IO, hash::SHA256) = print(io, "SHA256(\"", hash, "\")")
+end
+
 """
     RegEdit.RegistryCache(path, registries=Dict())
 

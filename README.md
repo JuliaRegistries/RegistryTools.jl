@@ -9,3 +9,7 @@ Functionality for modifying Julia registry files.
 #### Updating to 2.0
 
 RegistryTools.jl changed the API in 2.0 from taking a `Pkg.Types.Project` to just taking a path to a project file instead.
+
+#### Updating to 3.0
+
+RegistryTools.jl now requires both SHA1 and SHA256 treehashes.
