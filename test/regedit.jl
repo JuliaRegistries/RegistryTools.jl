@@ -698,7 +698,7 @@ end
         projects_path = joinpath(@__DIR__, "project_files")
         project_file = joinpath(projects_path, "Example1.toml")
         pkg = Project(project_file)
-        @test find_registered_version(pkg, registry_path) == ""
+        @test find_registered_version(pkg, registry_path) == nothing
         package_repo = string("http://example.com/$(pkg.name).git")
         tree_hash_sha1 = RegistryTools.SHA1("7dd821daaae58ddf9fee53e00aa1aab33794d130")
         tree_hash_sha256 = RegistryTools.SHA256("62f01487f2300b549c90804669856555e567ecc13fca092b1a4443f705630fd1")
