@@ -715,5 +715,5 @@ function find_registered_version(pkg::Project,
     end
     sha1 = SHA1(versions_data[string(pkg.version)]["git-tree-sha1"])
     sha256 = SHA256(versions_data[string(pkg.version)]["git-tree-sha256"])
-    return (; sha1, sha256)
+    return (; sha1=sha1, sha256=sha256)
 end
