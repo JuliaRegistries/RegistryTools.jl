@@ -301,7 +301,7 @@ end
         @test data isa Dict
         @test collect(keys(data)) == ["1.0.0"]
         @test data["1.0.0"] isa Dict
-        @test collect(keys(data["1.0.0"])) == ["git-tree-sha1", "git-tree-sha256"]
+        @test sort(collect(keys(data["1.0.0"]))) == ["git-tree-sha1", "git-tree-sha256"]
         @test data["1.0.0"]["git-tree-sha1"] == string(tree_hash_sha1)
         @test data["1.0.0"]["git-tree-sha256"] == string(tree_hash_sha256)
 
