@@ -705,7 +705,7 @@ function find_registered_version(pkg::Project,
     # Cannot use find_package_in_registry since it may add paths in
     # the registry.
     if !haskey(registry_data.packages, string(pkg.uuid))
-        return ""
+        return nothing
     end
     package_data = registry_data.packages[string(pkg.uuid)]
     package_path = joinpath(registry_path, package_data["path"])
