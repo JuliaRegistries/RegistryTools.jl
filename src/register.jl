@@ -326,8 +326,12 @@ end
 function update_versions_file(pkg::Project,
                               versions_file::AbstractString,
                               versions_data::Dict{String, Any},
-                              tree_hash::AbstractString)
-    version_info = Dict{String, Any}("git-tree-sha1" => string(tree_hash))
+                              tree_hash_sha1::SHA1,
+                              tree_hash_sha256::SHA256)
+    version_info = Dict{String, Any}(
+        "git-tree-sha1" => string(tree_hash_sha1),
+        "git-tree-sha256" => string(tree_hash_sha256)
+    )
     versions_data[string(pkg.version)] = version_info
 
     open(versions_file, "w") do io
@@ -526,7 +530,7 @@ function get_registrator_tree_sha()
     return "unknown"
 end
 
-function check_and_update_registry_files(pkg::Project, package_repo, tree_hash,
+function check_and_update_registry_files(pkg::Project, package_repo, tree_hash_sha1::SHA1, tree_hash_sha256::SHA256,
                                          registry_path, registry_deps_paths,
                                          status; subdir = "")
     # find package in registry
@@ -548,7 +552,7 @@ function check_and_update_registry_files(pkg::Project, package_repo, tree_hash,
     versions_file, versions_data = get_versions_file(package_path)
     old_versions = check_versions!(pkg, versions_data, status)
     haserror(status) && return
-    update_versions_file(pkg, versions_file, versions_data, tree_hash)
+    update_versions_file(pkg, versions_file, versions_data, tree_hash_sha1, tree_hash_sha256)
 
     # update package data: deps file
     @debug("update package data: deps file")
@@ -568,9 +572,9 @@ function check_and_update_registry_files(pkg::Project, package_repo, tree_hash,
 end
 
 """
-    register(package_repo, pkg, tree_hash; registry, registry_fork, registry_deps, push, gitconfig)
+    register(package_repo, pkg, tree_hash_sha1, tree_hash_sha256; registry, registry_fork, registry_deps, push, gitconfig)
 
-Register the package at `package_repo` / `tree_hash` in `registry`.
+Register the package at `package_repo` / `tree_hash_{sha1,sha256}` in `registry`.
 Returns a `RegEdit.RegBranch` which contains information about the registration and/or any
 errors or warnings that occurred.
 
@@ -578,7 +582,10 @@ errors or warnings that occurred.
 
 * `package_repo::AbstractString`: The git repository URL for the package to be registered. If empty, keep the stored repository URL.
 * `pkg::String`: the path of the project file for the package to be registered
-* `tree_hash::AbstractString`: the tree hash (not commit hash) of the package revision to be registered
+* `tree_hash_sha1::AbstractString`: the SHA1 tree hash (not commit hash) of the package revision to be registered
+* `tree_hash_sha256::AbstractString`: the SHA256 tree hash (not commit hash) of the package revision to be registered
+
+It is the responsibility of the user to ensure that the SHA1 tree hash and the SHA256 tree hash point to the same exact content.
 
 # Keyword Arguments
 
@@ -591,7 +598,7 @@ errors or warnings that occurred.
 * `gitconfig::Dict=Dict()`: dictionary of configuration options for the `git` command
 """
 function register(
-    package_repo::AbstractString, pkg::Union{String, Project}, tree_hash::AbstractString;
+    package_repo::AbstractString, pkg::Union{String, Project}, tree_hash_sha1::SHA1, tree_hash_sha256::SHA256;
     registry::AbstractString = DEFAULT_REGISTRY_URL,
     registry_fork::AbstractString = registry,
     registry_deps::Vector{<:AbstractString} = AbstractString[],
@@ -641,7 +648,7 @@ function register(
             run(pipeline(`$git checkout -f $branch`; stdout=devnull))
         end
 
-        check_and_update_registry_files(pkg, package_repo, tree_hash,
+        check_and_update_registry_files(pkg, package_repo, tree_hash_sha1, tree_hash_sha256,
                                         registry_path, registry_deps_paths,
                                         status, subdir = subdir)
         haserror(status) && return set_metadata!(regbr, status)
@@ -657,7 +664,8 @@ function register(
 
         UUID: $(pkg.uuid)
         Repo: $(package_repo)
-        Tree: $(string(tree_hash))
+        Tree (SHA1): $(string(tree_hash_sha1))
+        Tree (SHA256): $(string(tree_hash_sha256))
 
         Registrator tree SHA: $(regtreesha)
         """
@@ -688,8 +696,7 @@ end
     find_registered_version(pkg, registry_path)
 
 If the package and version specified by `pkg` exists in the registry
-at `registry_path`, return its tree hash. Otherwise return the empty
-string.
+at `registry_path`, return its tree hashes. Otherwise, return nothing
 """
 function find_registered_version(pkg::Project,
                                  registry_path::AbstractString)
@@ -704,7 +711,9 @@ function find_registered_version(pkg::Project,
     package_path = joinpath(registry_path, package_data["path"])
     _, versions_data = get_versions_file(package_path)
     if !haskey(versions_data, string(pkg.version))
-        return ""
+        return nothing
     end
-    return versions_data[string(pkg.version)]["git-tree-sha1"]
+    sha1 = SHA1(versions_data[string(pkg.version)]["git-tree-sha1"])
+    sha256 = SHA256(versions_data[string(pkg.version)]["git-tree-sha256"])
+    return (; sha1, sha256)
 end

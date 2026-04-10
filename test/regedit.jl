@@ -283,7 +283,8 @@ end
     import RegistryTools: get_versions_file, update_versions_file, check_versions!
     mktempdir(@__DIR__) do temp_dir
         pkg = Project(Dict("version" => "1.0.0"))
-        tree_hash = repeat("0", 40)
+        tree_hash_sha1 = RegistryTools.SHA1(repeat("0", 40))
+        tree_hash_sha256 = RegistryTools.SHA256(repeat("0", 64))
         status = ReturnStatus()
 
         filename, data = get_versions_file(temp_dir)
@@ -294,14 +295,15 @@ end
         # No previous version registered, this version is fine.
         @test !haserror(status)
 
-        update_versions_file(pkg, filename, data, tree_hash)
+        update_versions_file(pkg, filename, data, tree_hash_sha1, tree_hash_sha256)
 
         _, data = get_versions_file(temp_dir)
         @test data isa Dict
         @test collect(keys(data)) == ["1.0.0"]
         @test data["1.0.0"] isa Dict
-        @test collect(keys(data["1.0.0"])) == ["git-tree-sha1"]
-        @test data["1.0.0"]["git-tree-sha1"] == tree_hash
+        @test collect(keys(data["1.0.0"])) == ["git-tree-sha1", "git-tree-sha256"]
+        @test data["1.0.0"]["git-tree-sha1"] == string(tree_hash_sha1)
+        @test data["1.0.0"]["git-tree-sha256"] == string(tree_hash_sha256)
 
         check_versions!(pkg, data, status)
         # This version was just registered, should be a complaint now.
@@ -315,8 +317,10 @@ end
         uuid = Base.UUID("8dfed614-e22c-5e08-85e1-65c5234f0b40")
         deps = Dict("Test" => string(uuid))
         pkg = Project(Dict("version" => "1.0.0", "deps" => deps))
+        tree_hash_sha1 = RegistryTools.SHA1(repeat("0", 40))
+        tree_hash_sha256 = RegistryTools.SHA256(repeat("0", 64))
         update_versions_file(pkg, joinpath(temp_dir, "Versions.toml"),
-                             Dict{String, Any}(), repeat("0", 40))
+                             Dict{String, Any}(), tree_hash_sha1, tree_hash_sha256)
         update_deps_file(pkg, temp_dir, VersionNumber[])
         deps_file = joinpath(temp_dir, "Deps.toml")
         @test isfile(deps_file)
@@ -338,8 +342,10 @@ end
     mktempdir(@__DIR__) do temp_dir
         compat = Dict("julia" => "1.3")
         pkg = Project(Dict("version" => "1.0.0", "compat" => compat))
+        tree_hash_sha1 = RegistryTools.SHA1(repeat("0", 40))
+        tree_hash_sha256 = RegistryTools.SHA256(repeat("0", 64))
         update_versions_file(pkg, joinpath(temp_dir, "Versions.toml"),
-                             Dict{String, Any}(), repeat("0", 40))
+                             Dict{String, Any}(), tree_hash_sha1, tree_hash_sha256)
         update_compat_file(pkg, temp_dir, VersionNumber[])
         compat_file = joinpath(temp_dir, "Compat.toml")
         @test isfile(compat_file)
@@ -556,7 +562,8 @@ end
         registry_path = joinpath(temp_dir, "registry")
         projects_path = joinpath(@__DIR__, "project_files")
         registry_deps_paths = String[]
-        tree_hash = repeat("0", 40)
+        tree_hash_sha1 = RegistryTools.SHA1(repeat("0", 40))
+        tree_hash_sha256 = RegistryTools.SHA256(repeat("0", 64))
         for test_data in registry_update_tests
             if haskey(test_data, :skip_for_newer_julia) && VERSION >= v"1.2"
                 continue
@@ -580,7 +587,7 @@ end
                 elseif get(test_data, :no_package_repo, "") == project
                     package_repo = ""
                 end
-                check_and_update_registry_files(pkg, package_repo, tree_hash,
+                check_and_update_registry_files(pkg, package_repo, tree_hash_sha1, tree_hash_sha256,
                                                 registry_path,
                                                 registry_deps_paths, status)
                 haserror(status) && break
@@ -611,10 +618,11 @@ function create_and_populate_registry(registry_path, registry_name,
     project_file = joinpath(projects_path, "$(package).toml")
     pkg = Project(project_file)
     package_repo = "http://example.com/$(pkg.name).git"
-    tree_hash = repeat("0", 40)
+    tree_hash_sha1 = RegistryTools.SHA1(repeat("0", 40))
+    tree_hash_sha256 = RegistryTools.SHA256(repeat("0", 64))
     registry_deps_paths = String[]
     status = ReturnStatus()
-    check_and_update_registry_files(pkg, package_repo, tree_hash,
+    check_and_update_registry_files(pkg, package_repo, tree_hash_sha1, tree_hash_sha256,
                                     registry_path,
                                     registry_deps_paths, status)
 
@@ -653,10 +661,11 @@ end
             project_file = joinpath(projects_path, "Example18.toml")
             pkg = pkg_f(project_file)
             package_repo = "http://example.com/Example.git"
-            tree_hash = repeat("0", 40)
+            tree_hash_sha1 = RegistryTools.SHA1(repeat("0", 40))
+            tree_hash_sha256 = RegistryTools.SHA256(repeat("0", 64))
             registry_repo = "file://$(registry1_path)"
             deps_repo = "file://$(registry2_path)"
-            regbr = register(package_repo, pkg, tree_hash, registry = registry_repo,
+            regbr = register(package_repo, pkg, tree_hash_sha1, tree_hash_sha256, registry = registry_repo,
                              registry_deps = [deps_repo], push = true,
                              gitconfig = TEST_GITCONFIG)
             if haskey(regbr.metadata, "error") || haskey(regbr.metadata, "warning")
@@ -691,17 +700,19 @@ end
         pkg = Project(project_file)
         @test find_registered_version(pkg, registry_path) == ""
         package_repo = string("http://example.com/$(pkg.name).git")
-        tree_hash = "7dd821daaae58ddf9fee53e00aa1aab33794d130"
+        tree_hash_sha1 = RegistryTools.SHA1("7dd821daaae58ddf9fee53e00aa1aab33794d130")
+        tree_hash_sha256 = RegistryTools.SHA256("62f01487f2300b549c90804669856555e567ecc13fca092b1a4443f705630fd1")
         registry_deps_paths = String[]
         status = ReturnStatus()
-        check_and_update_registry_files(pkg, package_repo, tree_hash,
+        check_and_update_registry_files(pkg, package_repo, tree_hash_sha1, tree_hash_sha256,
                                         registry_path,
                                         registry_deps_paths, status)
 
-        @test find_registered_version(pkg, registry_path) == tree_hash
+        @test find_registered_version(pkg, registry_path).sha1 == tree_hash_sha1
+        @test find_registered_version(pkg, registry_path).sha256 == tree_hash_sha256
         project_file = joinpath(projects_path, "Example2.toml")
         pkg = Project(project_file)
-        @test find_registered_version(pkg, registry_path) == ""
+        @test find_registered_version(pkg, registry_path) == nothing
     end
 end
 
@@ -712,9 +723,10 @@ end
          "1.0.0" => Dict("yanked"=>true,"git-tree-sha1"=>"b04b6c6bfd3a607aa1b85362b4854ef612137f3e"),
          "3.0.0" => Dict("git-tree-sha1"=>"96429a372b5c4ad63fa9cbff6ba4178a85939705","foo"=>"bar")
     )
-    tree_hash = "20cd0a2651eaf28c8a76c8d7fea4f1107f20174b"
+    tree_hash_sha1 = RegistryTools.SHA1("20cd0a2651eaf28c8a76c8d7fea4f1107f20174b")
+    tree_hash_sha256 = RegistryTools.SHA256("0d77587419c4cfdd4f5ed7d2ce6db1b0a2786d4485edd19051c312762341eca6")
     mktemp() do path, io
-        RegistryTools.update_versions_file(pkg, path, version_data, tree_hash::AbstractString)
+        RegistryTools.update_versions_file(pkg, path, version_data, tree_hash_sha1, tree_hash_sha256)
         close(io)
         @test read(path, String) ==
         """
@@ -724,6 +736,7 @@ end
 
         ["2.0.0"]
         git-tree-sha1 = "20cd0a2651eaf28c8a76c8d7fea4f1107f20174b"
+        git-tree-sha256 = "0d77587419c4cfdd4f5ed7d2ce6db1b0a2786d4485edd19051c312762341eca6"
 
         ["3.0.0"]
         git-tree-sha1 = "96429a372b5c4ad63fa9cbff6ba4178a85939705"
@@ -739,7 +752,8 @@ end
         registry_path = joinpath(temp_dir, "registry")
         projects_path = joinpath(@__DIR__, "project_files")
         registry_deps_paths = String[]
-        tree_hash = repeat("0", 40)
+        tree_hash_sha1 = RegistryTools.SHA1(repeat("0", 40))
+        tree_hash_sha256 = RegistryTools.SHA256(repeat("0", 64))
         # Start with an empty registry.
         create_empty_registry(registry_path, "TestRegistry",
                               "d4e2f5cd-0f48-4704-9988-f1754e755b45")
@@ -748,7 +762,7 @@ end
         pkg = Project(project_file)
         status = ReturnStatus()
         package_repo = "http://example.com/Example1.git"
-        check_and_update_registry_files(pkg, package_repo, tree_hash,
+        check_and_update_registry_files(pkg, package_repo, tree_hash_sha1, tree_hash_sha256,
                                         registry_path,
                                         registry_deps_paths, status)
         path = RegistryTools.package_relpath("Example")
@@ -764,7 +778,7 @@ end
         pkg = Project(project_file)
         status = ReturnStatus()
         package_repo = "http://example.com/BigRepo.git"
-        check_and_update_registry_files(pkg, package_repo, tree_hash,
+        check_and_update_registry_files(pkg, package_repo, tree_hash_sha1, tree_hash_sha256,
                                         registry_path,
                                         registry_deps_paths, status,
                                         subdir = "packages/Dep")
@@ -786,7 +800,8 @@ end
         registry_path = joinpath(temp_dir, "registry")
         projects_path = joinpath(@__DIR__, "project_files")
         registry_deps_paths = String[]
-        tree_hash = repeat("0", 40)
+        tree_hash_sha1 = RegistryTools.SHA1(repeat("0", 40))
+        tree_hash_sha256 = RegistryTools.SHA256(repeat("0", 64))
         # Start with an empty registry.
         create_empty_registry(registry_path, "TestRegistry",
                               "d4e2f5cd-0f48-4704-9988-f1754e755b45")
@@ -794,7 +809,7 @@ end
         pkg = Project(project_file)
         status = ReturnStatus()
         package_repo = "http://example.com/Example1.git"
-        check_and_update_registry_files(pkg, package_repo, tree_hash,
+        check_and_update_registry_files(pkg, package_repo, tree_hash_sha1, tree_hash_sha256,
                                         registry_path,
                                         registry_deps_paths, status)
         path = RegistryTools.package_relpath("Example")
