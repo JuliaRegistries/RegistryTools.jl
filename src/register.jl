@@ -326,8 +326,13 @@ end
 function update_versions_file(pkg::Project,
                               versions_file::AbstractString,
                               versions_data::Dict{String, Any},
-                              tree_hash::AbstractString)
-    version_info = Dict{String, Any}("git-tree-sha1" => string(tree_hash))
+                              tree_hash)
+    if tree_hash isa AbstractString
+        version_info = Dict{String, Any}("git-tree-sha1" => string(tree_hash))
+    else
+        version_info = Dict{String, Any}("git-tree-$(lowercase(string(key)))" => string(value)
+                                         for (key, value) in pairs(tree_hash))
+    end
     versions_data[string(pkg.version)] = version_info
 
     open(versions_file, "w") do io
@@ -339,12 +344,12 @@ function update_versions_file(pkg::Project,
             if occursin(Base.VERSION_REGEX, x)
                 return VersionNumber(x)
             else
-                if x == "git-tree-sha1"
-                    return 1
+                if startswith(x, "git-tree-sha1")
+                    return (1, x)
                 elseif x == "yanked"
-                    return 2
+                    return (2, x)
                 else
-                    return 3
+                    return (3, x)
                 end
             end
         end
@@ -578,7 +583,7 @@ errors or warnings that occurred.
 
 * `package_repo::AbstractString`: The git repository URL for the package to be registered. If empty, keep the stored repository URL.
 * `pkg::String`: the path of the project file for the package to be registered
-* `tree_hash::AbstractString`: the tree hash (not commit hash) of the package revision to be registered
+* `tree_hash`: the tree hash (not commit hash) of the package revision to be registered. This can either be an `AbstractString` for a single SHA1 hash or a named tuple of hash algorithms and hashes.
 
 # Keyword Arguments
 
@@ -591,7 +596,7 @@ errors or warnings that occurred.
 * `gitconfig::Dict=Dict()`: dictionary of configuration options for the `git` command
 """
 function register(
-    package_repo::AbstractString, pkg::Union{String, Project}, tree_hash::AbstractString;
+    package_repo::AbstractString, pkg::Union{String, Project}, tree_hash;
     registry::AbstractString = DEFAULT_REGISTRY_URL,
     registry_fork::AbstractString = registry,
     registry_deps::Vector{<:AbstractString} = AbstractString[],
@@ -657,7 +662,7 @@ function register(
 
         UUID: $(pkg.uuid)
         Repo: $(package_repo)
-        Tree: $(string(tree_hash))
+        $(format_tree_hashes(tree_hash))
 
         Registrator tree SHA: $(regtreesha)
         """
@@ -684,27 +689,58 @@ function register(
     return set_metadata!(regbr, status)
 end
 
+function format_tree_hashes(tree_hash::AbstractString)
+    return "Tree: $(string(tree_hash))"
+end
+
+function format_tree_hashes(tree_hash)
+    return join(("Tree ($key): $value" for (key, value) in pairs(tree_hash)), "\n")
+end
+
 """
     find_registered_version(pkg, registry_path)
 
 If the package and version specified by `pkg` exists in the registry
-at `registry_path`, return its tree hash. Otherwise return the empty
-string.
+at `registry_path` and has a SHA1 tree hash, return it. Otherwise
+return the empty string.
+
+This is a legacy function. New code and updates should use
+`find_registered_version_hashes`.
 """
 function find_registered_version(pkg::Project,
                                  registry_path::AbstractString)
+    hashes = find_registered_version_hashes(pkg::Project,
+                                            registry_path::AbstractString)
+    return get(hashes, "sha1", "")
+end
+"""
+    find_registered_version_hashes(pkg, registry_path)
+
+If the package and version specified by `pkg` exists in the registry
+at `registry_path`, return a dictionary containing pairs of hash
+algorithm names and corresponding tree hash values (as strings).
+Otherwise return an empty dictionary.
+"""
+function find_registered_version_hashes(pkg::Project,
+                                        registry_path::AbstractString)
+    hashes = Dict{String, String}()
     registry_file = joinpath(registry_path, "Registry.toml")
     registry_data = parse_registry(registry_file)
     # Cannot use find_package_in_registry since it may add paths in
     # the registry.
     if !haskey(registry_data.packages, string(pkg.uuid))
-        return ""
+        return hashes
     end
     package_data = registry_data.packages[string(pkg.uuid)]
     package_path = joinpath(registry_path, package_data["path"])
     _, versions_data = get_versions_file(package_path)
-    if !haskey(versions_data, string(pkg.version))
-        return ""
+    if haskey(versions_data, string(pkg.version))
+        for (key, value) in versions_data[string(pkg.version)]
+            if startswith(key, "git-tree-")
+                # chopprefix is nicer but requires Julia 1.8.
+                hashes[last(split(key, "git-tree-", limit = 2))] = value
+            end
+        end
     end
-    return versions_data[string(pkg.version)]["git-tree-sha1"]
+    return hashes
 end
