@@ -7,6 +7,7 @@ using RegistryTools: DEFAULT_REGISTRY_URL,
     gitcmd,
     register,
     find_registered_version,
+    find_registered_version_hashes,
     RegistryData
 import LibGit2
 using Pkg: TOML
@@ -281,31 +282,40 @@ end
 
 @testset "versions_file" begin
     import RegistryTools: get_versions_file, update_versions_file, check_versions!
-    mktempdir(@__DIR__) do temp_dir
-        pkg = Project(Dict("version" => "1.0.0"))
-        tree_hash = repeat("0", 40)
-        status = ReturnStatus()
+    tree_hashes = [repeat("0", 40),
+                   (; sha1 = repeat("0", 40), sha256 = repeat("0", 64))]
+    for tree_hash in tree_hashes
+        mktempdir(@__DIR__) do temp_dir
+            pkg = Project(Dict("version" => "1.0.0"))
+            status = ReturnStatus()
 
-        filename, data = get_versions_file(temp_dir)
-        @test filename == joinpath(temp_dir, "Versions.toml")
-        @test data isa Dict
-        @test isempty(data)
-        check_versions!(pkg, data, status)
-        # No previous version registered, this version is fine.
-        @test !haserror(status)
+            filename, data = get_versions_file(temp_dir)
+            @test filename == joinpath(temp_dir, "Versions.toml")
+            @test data isa Dict
+            @test isempty(data)
+            check_versions!(pkg, data, status)
+            # No previous version registered, this version is fine.
+            @test !haserror(status)
 
-        update_versions_file(pkg, filename, data, tree_hash)
+            update_versions_file(pkg, filename, data, tree_hash)
 
-        _, data = get_versions_file(temp_dir)
-        @test data isa Dict
-        @test collect(keys(data)) == ["1.0.0"]
-        @test data["1.0.0"] isa Dict
-        @test collect(keys(data["1.0.0"])) == ["git-tree-sha1"]
-        @test data["1.0.0"]["git-tree-sha1"] == tree_hash
+            _, data = get_versions_file(temp_dir)
+            @test data isa Dict
+            @test collect(keys(data)) == ["1.0.0"]
+            @test data["1.0.0"] isa Dict
+            if tree_hash isa String
+                @test collect(keys(data["1.0.0"])) == ["git-tree-sha1"]
+                @test data["1.0.0"]["git-tree-sha1"] == tree_hash
+            else
+                @test Set(keys(data["1.0.0"])) == Set(["git-tree-sha1", "git-tree-sha256"])
+                @test data["1.0.0"]["git-tree-sha1"] == tree_hash.sha1
+                @test data["1.0.0"]["git-tree-sha256"] == tree_hash.sha256
+            end
 
-        check_versions!(pkg, data, status)
-        # This version was just registered, should be a complaint now.
-        @test haserror(status)
+            check_versions!(pkg, data, status)
+            # This version was just registered, should be a complaint now.
+            @test haserror(status)
+        end
     end
 end
 
@@ -602,7 +612,7 @@ end
 
 # Helper function for the next testset.
 function create_and_populate_registry(registry_path, registry_name,
-                                      registry_uuid, package)
+                                      registry_uuid, package, tree_hash)
     # Create an empty registry.
     create_empty_registry(registry_path, registry_name, registry_uuid)
 
@@ -611,7 +621,6 @@ function create_and_populate_registry(registry_path, registry_name,
     project_file = joinpath(projects_path, "$(package).toml")
     pkg = Project(project_file)
     package_repo = "http://example.com/$(pkg.name).git"
-    tree_hash = repeat("0", 40)
     registry_deps_paths = String[]
     status = ReturnStatus()
     check_and_update_registry_files(pkg, package_repo, tree_hash,
@@ -635,30 +644,33 @@ end
 # version of one of the packages with a dependency to the other
 # package. The registration is pushed to a new branch via a file URL.
 @testset "register" begin
-    for pkg_f in [identity, Project]
+    tree_hashes = [repeat("0", 40),
+                   (; sha1 = repeat("0", 40), sha256 = repeat("0", 64))]
+    for pkg_f in [identity, Project], tree_hash in tree_hashes
         mktempdir(@__DIR__) do temp_dir
+            cache_dir = joinpath("temp_dir", "cache")
+            cache = RegistryTools.RegistryCache(cache_dir)
             registry1_path = joinpath(temp_dir, "Registry1")
             status = create_and_populate_registry(registry1_path, "Registry1",
                                                   "7e1d4fce-5fe6-405e-8bac-078d4138e9a2",
-                                                  "Example1")
+                                                  "Example1", tree_hash)
             @test !haserror(status)
 
             registry2_path = joinpath(@__DIR__, temp_dir, "Registry2")
             status = create_and_populate_registry(registry2_path, "Registry2",
                                                   "a5a8be26-c942-4674-beee-533a0e81ac1d",
-                                                  "Dep1")
+                                                  "Dep1", tree_hash)
             @test !haserror(status)
 
             projects_path = joinpath(@__DIR__, "project_files")
             project_file = joinpath(projects_path, "Example18.toml")
             pkg = pkg_f(project_file)
             package_repo = "http://example.com/Example.git"
-            tree_hash = repeat("0", 40)
             registry_repo = "file://$(registry1_path)"
             deps_repo = "file://$(registry2_path)"
             regbr = register(package_repo, pkg, tree_hash, registry = registry_repo,
                              registry_deps = [deps_repo], push = true,
-                             gitconfig = TEST_GITCONFIG)
+                             cache = cache, gitconfig = TEST_GITCONFIG)
             if haskey(regbr.metadata, "error") || haskey(regbr.metadata, "warning")
                 @info "" get(regbr.metadata, "error", nothing) get(regbr.metadata, "warning", nothing)
             end
@@ -667,13 +679,6 @@ end
             branches = readlines(`$git branch`)
             @test length(branches) == 2
         end
-
-        # Clean up the registry cache created by `register`.
-        rm(joinpath(@__DIR__, "registries", "7e1d4fce-5fe6-405e-8bac-078d4138e9a2"),
-           recursive = true)
-        rm(joinpath(@__DIR__, "registries", "a5a8be26-c942-4674-beee-533a0e81ac1d"),
-           recursive = true)
-        rm(joinpath(@__DIR__, "registries"))
     end
 end
 
@@ -690,15 +695,19 @@ end
         project_file = joinpath(projects_path, "Example1.toml")
         pkg = Project(project_file)
         @test find_registered_version(pkg, registry_path) == ""
+        @test find_registered_version_hashes(pkg, registry_path) == Dict()
         package_repo = string("http://example.com/$(pkg.name).git")
-        tree_hash = "7dd821daaae58ddf9fee53e00aa1aab33794d130"
+        tree_hash = (; sha1 = "7dd821daaae58ddf9fee53e00aa1aab33794d130",
+                     sha256 = "62f01487f2300b549c90804669856555e567ecc13fca092b1a4443f705630fd1")
         registry_deps_paths = String[]
         status = ReturnStatus()
         check_and_update_registry_files(pkg, package_repo, tree_hash,
                                         registry_path,
                                         registry_deps_paths, status)
 
-        @test find_registered_version(pkg, registry_path) == tree_hash
+        @test find_registered_version(pkg, registry_path) == tree_hash.sha1
+        @test find_registered_version_hashes(pkg, registry_path) ==
+            Dict("sha1" => tree_hash.sha1, "sha256" => tree_hash.sha256)
         project_file = joinpath(projects_path, "Example2.toml")
         pkg = Project(project_file)
         @test find_registered_version(pkg, registry_path) == ""
@@ -709,12 +718,15 @@ end
     pkg = Project(Dict("version" => "2.0.0"))
     # versions_file = "Versions.toml"
     version_data = Dict{String,Any}(
-         "1.0.0" => Dict("yanked"=>true,"git-tree-sha1"=>"b04b6c6bfd3a607aa1b85362b4854ef612137f3e"),
-         "3.0.0" => Dict("git-tree-sha1"=>"96429a372b5c4ad63fa9cbff6ba4178a85939705","foo"=>"bar")
+        "1.0.0" => Dict("yanked" => true,
+                        "git-tree-sha1" => "b04b6c6bfd3a607aa1b85362b4854ef612137f3e"),
+        "3.0.0" => Dict("git-tree-sha1" => "96429a372b5c4ad63fa9cbff6ba4178a85939705",
+                        "foo"=>"bar")
     )
-    tree_hash = "20cd0a2651eaf28c8a76c8d7fea4f1107f20174b"
+    tree_hash = (;sha1 = "20cd0a2651eaf28c8a76c8d7fea4f1107f20174b",
+                 sha256 = "0d77587419c4cfdd4f5ed7d2ce6db1b0a2786d4485edd19051c312762341eca6")
     mktemp() do path, io
-        RegistryTools.update_versions_file(pkg, path, version_data, tree_hash::AbstractString)
+        RegistryTools.update_versions_file(pkg, path, version_data, tree_hash)
         close(io)
         @test read(path, String) ==
         """
@@ -724,6 +736,7 @@ end
 
         ["2.0.0"]
         git-tree-sha1 = "20cd0a2651eaf28c8a76c8d7fea4f1107f20174b"
+        git-tree-sha256 = "0d77587419c4cfdd4f5ed7d2ce6db1b0a2786d4485edd19051c312762341eca6"
 
         ["3.0.0"]
         git-tree-sha1 = "96429a372b5c4ad63fa9cbff6ba4178a85939705"
