@@ -231,10 +231,10 @@ end
         pkg = Project(Dict("name" => "Example", "uuid" => uuid))
         repo = "https://example.com/example.git"
         status = ReturnStatus()
-        @test check_package!("", package_path, status) == ""
+        @test check_package!("", package_path, status) == ("", nothing)
         @test haserror(status)
         status = ReturnStatus()
-        @test check_package!(repo, package_path, status) == repo
+        @test check_package!(repo, package_path, status) == (repo, nothing)
         @test !haserror(status)
         update_package_file(pkg, repo, "", package_path)
         package_file = joinpath(package_path, "Package.toml")
@@ -245,10 +245,10 @@ end
                                             repo = "$repo"
                                             """
         status = ReturnStatus()
-        @test check_package!("", package_path, status) == repo
+        @test check_package!("", package_path, status) == (repo, nothing)
         @test !haserror(status)
         status = ReturnStatus()
-        @test check_package!(repo, package_path, status) == repo
+        @test check_package!(repo, package_path, status) == (repo, nothing)
         @test !haserror(status)
     end
 end
@@ -823,6 +823,58 @@ end
 
     # JLLs are in seperate top level directory
     @test RegistryTools.package_relpath("Example_jll") == "jll/E/Example_jll"
+end
+
+@testset "package metadata" begin
+    import RegistryTools: ReturnStatus, check_and_update_registry_files
+
+    mktempdir(@__DIR__) do temp_dir
+        registry_path = joinpath(temp_dir, "registry")
+        projects_path = joinpath(@__DIR__, "project_files")
+        registry_deps_paths = String[]
+        tree_hash = repeat("0", 40)
+
+        # Start with an empty registry.
+        create_empty_registry(registry_path, "TestRegistry",
+                              "d4e2f5cd-0f48-4704-9988-f1754e755b45")
+
+        # Register Example v1.0.0.
+        project_file = joinpath(projects_path, "Example1.toml")
+        pkg = Project(project_file)
+        status = ReturnStatus()
+        package_repo = "http://example.com/Example1.git"
+        check_and_update_registry_files(pkg, package_repo, tree_hash,
+                                        registry_path,
+                                        registry_deps_paths, status)
+        @test !haserror(status)
+        path = RegistryTools.package_relpath("Example")
+
+        # Patch in deprecation metadata in Package.toml.
+        package_toml_path = joinpath(registry_path, path, "Package.toml")
+        deprecation_data =
+            """
+
+            [metadata.deprecated]
+            reason = "This package is unmaintained."
+            alternative = "ExampleNextGeneration"
+            """
+        open(package_toml_path, "a") do f
+            write(f, deprecation_data)
+        end
+
+        # Register Example v1.0.1.
+        project_file = joinpath(projects_path, "Example2.toml")
+        pkg = Project(project_file)
+        status = ReturnStatus()
+        package_repo = "http://example.com/Example1.git"
+        check_and_update_registry_files(pkg, package_repo, tree_hash,
+                                        registry_path,
+                                        registry_deps_paths, status)
+        @test !haserror(status)
+
+        # Verify that deprecation data is intact.
+        @test endswith(read(package_toml_path, String), deprecation_data)
+    end
 end
 
 end

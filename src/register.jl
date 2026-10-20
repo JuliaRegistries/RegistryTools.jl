@@ -274,8 +274,11 @@ function check_package!(package_repo::AbstractString,
     package_file = joinpath(package_path, "Package.toml")
     # If this is a registration of a new package, the package file has
     # not been created yet.
+    metadata = nothing
     if isfile(package_file)
-        repo = TOML.parsefile(package_file)["repo"]
+        package_data = TOML.parsefile(package_file)
+        repo = package_data["repo"]
+        metadata = get(package_data, "metadata", nothing)
         if isempty(package_repo)
             package_repo = repo
         elseif repo != package_repo
@@ -287,24 +290,28 @@ function check_package!(package_repo::AbstractString,
         add!(status, :package_url_missing)
     end
 
-    return package_repo
+    return package_repo, metadata
 end
 
 function update_package_file(pkg::Project,
                              package_repo::AbstractString,
                              subdir::AbstractString,
-                             package_path::AbstractString)
-    package_info = Dict{String,String}(
+                             package_path::AbstractString,
+                             package_metadata::Any = nothing)
+    package_info = Dict{String, Any}(
                         "name" => pkg.name,
                         "uuid" => string(pkg.uuid),
                         "repo" => package_repo)
     if !isempty(subdir)
         package_info["subdir"] = subdir
     end
+    if !isnothing(package_metadata)
+        package_info["metadata"] = package_metadata
+    end
     package_file = joinpath(package_path, "Package.toml")
     open(package_file, "w") do io
         TOML.print(io, package_info; sorted=true,
-            by = x -> x == "name" ? 1 : x == "uuid" ? 2 : x == "repo" ? 3 : 4)
+            by = x -> x == "name" ? 1 : x == "uuid" ? 2 : x == "repo" ? 3 : x == "subdir" ? 4 : 5)
     end
     nothing
 end
@@ -539,9 +546,11 @@ function check_and_update_registry_files(pkg::Project, package_repo, tree_hash,
 
     # update package data: package file
     @debug("update package data: package file")
-    package_repo = check_package!(package_repo, package_path, status)
+    package_repo, package_metadata =
+        check_package!(package_repo, package_path, status)
     haserror(status) && return
-    update_package_file(pkg, package_repo, subdir, package_path)
+    update_package_file(pkg, package_repo, subdir, package_path,
+                        package_metadata)
 
     # update package data: versions file
     @debug("update package data: versions file")
